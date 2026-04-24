@@ -9,8 +9,8 @@
 #include "include/utils/Logger.h"
 
 bool IsFileExist(const std::string strFileName) {
-    if (!experimental::filesystem::exists(
-            experimental::filesystem::path(strFileName))) {
+    if (!std::experimental::filesystem::exists(
+            std::experimental::filesystem::path(strFileName))) {
         return false;
     }
     else {
@@ -111,13 +111,13 @@ std::string GetOutputPath(std::string srcPath, std::string strPostfix) {
 std::string GetFileType(std::string strFilePath) {
     int i_pos = strFilePath.rfind(".");
     std::string str_suffix;
-    str_suffix = strFilePath.substr(i_pos, strFilePath.i_length());
+    str_suffix = strFilePath.substr(i_pos, strFilePath.length());
     return str_suffix;
 }
 
 std::string GetFileName(std::string strFilePath) {
     int i_pos = strFilePath.rfind("/");
     std::string str_suffix;
-    str_suffix = strFilePath.substr(i_pos + 1, strFilePath.i_length());
+    str_suffix = strFilePath.substr(i_pos + 1, strFilePath.length());
     return str_suffix;
 }

@@ -44,7 +44,7 @@ public:
     Level GetLevel(Severity nvSeverity);
 
 private:
-    static Level m_iLevel = Level::INFO;
+    static Level m_eLevel;
     Severity m_nvSeverity;
 };
 

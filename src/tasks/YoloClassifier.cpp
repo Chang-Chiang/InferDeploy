@@ -1,12 +1,14 @@
 #include "include/tasks/YoloClassifier.h"
 #include "include/tasks/ImageNetLabels.hpp"
 #include "include/utils/Process.h"
+#include "include/utils/CudaCheck.h"
 
 #include <memory>
+
 void YoloClassifier::Setup(void const* pData, size_t iSize) {
-    m_pRuntime     = shared_ptr<IRuntime>(createInferRuntime(*m_pLogger), DestroyTrtPtr<IRuntime>);
-    m_pEngine      = shared_ptr<ICudaEngine>(m_pRuntime->deserializeCudaEngine(pData, iSize), DestroyTrtPtr<ICudaEngine>);
-    m_pContext     = shared_ptr<IExecutionContext>(m_pEngine->createExecutionContext(), DestroyTrtPtr<IExecutionContext>);
+    m_pRuntime     = std::shared_ptr<nvinfer1::IRuntime>(nvinfer1::createInferRuntime(*m_pLogger), DestroyTrtPtr<nvinfer1::IRuntime>);
+    m_pEngine      = std::shared_ptr<nvinfer1::ICudaEngine>(m_pRuntime->deserializeCudaEngine(pData, iSize), DestroyTrtPtr<nvinfer1::ICudaEngine>);
+    m_pContext     = std::shared_ptr<nvinfer1::IExecutionContext>(m_pEngine->createExecutionContext(), DestroyTrtPtr<nvinfer1::IExecutionContext>);
     m_nvInputDims  = m_pContext->getBindingDimensions(0);
     m_nvOutputDims = m_pContext->getBindingDimensions(1);
 
@@ -16,10 +18,10 @@ void YoloClassifier::Setup(void const* pData, size_t iSize) {
     m_iOutputSize = m_pParams->m_iNumCls * sizeof(float);
     m_iImgArea    = m_pParams->m_cImgInfo.m_iHeight * m_pParams->m_cImgInfo.m_iWidth;
 
-    CUDA_CHECK(cudaMallocHost(&m_pInputMemory[0], m_iInputSize));
-    CUDA_CHECK(cudaMallocHost(&m_pOutputMemory[0], m_iOutputSize));
-    CUDA_CHECK(cudaMalloc(&m_pInputMemory[1], m_iInputSize));
-    CUDA_CHECK(cudaMalloc(&m_pOutputMemory[1], m_iOutputSize));
+    CUDA_CHECK(cudaMallocHost((void**)&m_pInputMemory[0], m_iInputSize));
+    CUDA_CHECK(cudaMallocHost((void**)&m_pOutputMemory[0], m_iOutputSize));
+    CUDA_CHECK(cudaMalloc((void**)&m_pInputMemory[1], m_iInputSize));
+    CUDA_CHECK(cudaMalloc((void**)&m_pOutputMemory[1], m_iOutputSize));
 
     m_pBindings[0] = m_pInputMemory[1];
     m_pBindings[1] = m_pOutputMemory[1];
@@ -104,7 +106,7 @@ bool YoloClassifier::PostprocessCpu() {
     LOG("Result:     %s", c_labels.ImagenetLabelString(i_pos).c_str());   
     LOG("Confidence  %.3f%%", f_confidence);   
 
-    m_pTimer->show();
+    m_pTimer->Show();
     printf("\n");
 
     return true;
@@ -116,5 +118,5 @@ bool YoloClassifier::PostprocessGpu() {
 }
 
 std::shared_ptr<YoloClassifier> MakeClassifier(std::string strModelPath, Level cLevel, Params cParams) {
-    return make_shared<YoloClassifier>(strModelPath, cLevel, cParams);
+    return std::make_shared<YoloClassifier>(strModelPath, cLevel, cParams);
 }

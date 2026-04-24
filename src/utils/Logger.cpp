@@ -1,12 +1,14 @@
 #include "include/utils/Logger.h"
 
-Logger::Logger(Level iLevel) {
-    m_iLevel = iLevel;
-    m_nvSeverity = GetSeverity(iLevel);
+Level Logger::m_eLevel = Level::INFO;
+
+Logger::Logger(Level eLevel) {
+    m_eLevel = eLevel;
+    m_nvSeverity = GetSeverity(eLevel);
 }
 
-Logger::Severity Logger::GetSeverity(Level iLevel) {
-    switch (iLevel) {
+Logger::Severity Logger::GetSeverity(Level eLevel) {
+    switch (eLevel) {
         case Level::FATAL: return Severity::kINTERNAL_ERROR;
         case Level::ERROR: return Severity::kERROR;
         case Level::WARN:  return Severity::kWARNING;
@@ -27,18 +29,18 @@ Level Logger::GetLevel(Severity nvSeverity) {
 }
 
 void Logger::log(Severity nvSeverity, const char* msg) noexcept {
-    if (nvSeverity <= get_severity(Level::WARN)
-        || m_iLevel >= Level::DEBUG)
+    if (nvSeverity <= GetSeverity(Level::WARN)
+        || m_eLevel >= Level::DEBUG)
         __log_info(GetLevel(nvSeverity), "%s", msg);
 }
 
-void Logger::__log_info(Level iLevel, const char* pFormat, ...) {
+void Logger::__log_info(Level eLevel, const char* pFormat, ...) {
     char msg[1000];
     va_list args;
     va_start(args, pFormat);
     int n = 0;
     
-    switch (iLevel) {
+    switch (eLevel) {
         case Level::DEBUG: n += snprintf(msg + n, sizeof(msg) - n, DGREEN "[debug]" CLEAR); break;
         case Level::VERB:  n += snprintf(msg + n, sizeof(msg) - n, PURPLE "[verb]" CLEAR); break;
         case Level::INFO:  n += snprintf(msg + n, sizeof(msg) - n, YELLOW "[info]" CLEAR); break;
@@ -51,16 +53,16 @@ void Logger::__log_info(Level iLevel, const char* pFormat, ...) {
 
     va_end(args);
 
-    if (iLevel <= m_iLevel) {
+    if (eLevel <= m_eLevel) {
         fprintf(stdout, "%s\n", msg);
     }
 
-    if (iLevel <= Level::ERROR) {
+    if (eLevel <= Level::ERROR) {
         fflush(stdout);
         exit(0);
     }
 }
 
-shared_ptr<Logger> CreateLogger(Level iLevel) {
-    return make_shared<Logger>(iLevel);
+std::shared_ptr<Logger> CreateLogger(Level eLevel) {
+    return std::make_shared<Logger>(eLevel);
 }

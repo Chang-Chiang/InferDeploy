@@ -2,6 +2,12 @@
 
 #include "opencv2/opencv.hpp"
 
+#ifdef __CUDACC__
+#define HOST_DEVICE __host__ __device__
+#else
+#define HOST_DEVICE
+#endif
+
 enum class InterpolationTactics : int32_t {
     CPU_NEAREST         = 0,
     CPU_BILINEAR        = 1,
@@ -62,6 +68,7 @@ struct AffineMatrix {
 
 extern  TransInfo    cTrans;
 extern  AffineMatrix cAffineMatrix;
+
 void    WarpAffineInit(int iSrcH, int iSrcW, int iTarH, int iTarW);
 
 cv::Mat ResizeCpu(
@@ -100,4 +107,4 @@ void ResizeBilinearGpu(
     int iSrcH, int iSrcW, 
     InterpolationTactics eInterpolation);
 
-__host__ __device__ void AffineTransformation(float* trans_matrix, int src_x, int src_y, float* tar_x, float* tar_y);
+HOST_DEVICE void AffineTransformation(float* trans_matrix, int src_x, int src_y, float* tar_x, float* tar_y);

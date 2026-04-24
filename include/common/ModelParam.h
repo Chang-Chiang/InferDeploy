@@ -1,3 +1,5 @@
+#pragma once
+
 #include "include/utils/Process.h"
 
 #define WORKSPACESIZE 1<<28
@@ -36,11 +38,11 @@ struct ImageInfo {
 
 /// @brief 模型构建参数
 struct Params {
-    Device               m_eDevice      = GPU;
-    int                  m_iNumCls  = 1000;
-    InterpolationTactics  m_eInterpolationTactic      = InterpolationTactics::GPU_BILINEAR;
-    ImageInfo           m_cImgInfo      = {224, 224, 3};
-    TaskType            m_eTask     = CLASSIFICATION;
-    int                  m_iWorkspaceSize  = WORKSPACESIZE;
-    Precision            m_ePrec     = FP32;
+    Device               m_eDevice              = GPU;
+    int                  m_iNumCls              = 1000;
+    InterpolationTactics m_eInterpolationTactic = InterpolationTactics::GPU_BILINEAR;
+    ImageInfo            m_cImgInfo             = {224, 224, 3};
+    TaskType             m_eTask                = CLASSIFICATION;
+    int                  m_iWorkspaceSize       = WORKSPACESIZE;
+    Precision            m_ePrec                = FP32;
 };

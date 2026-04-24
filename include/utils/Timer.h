@@ -3,6 +3,7 @@
 #include <chrono>
 #include <ratio>
 #include <string>
+#include <vector>
 
 #include <cuda_runtime.h>
 
@@ -56,6 +57,6 @@ void Timer::StopCpu(std::string strMsg) {
     else if(std::is_same<span, ns>::value) { str_time_unit = "ns"; }
 
     std::chrono::duration<double, span> d_time = m_pointCpuStop - m_pointCpuStart;
-    sprintf(c_buff, "\t%-60s uses %.6lf %s", strMsg.c_str(), d_time.count(), str_time_unit.c_str());
+    std::sprintf(c_buff, "\t%-60s uses %.6lf %s", strMsg.c_str(), d_time.count(), str_time_unit.c_str());
     m_strTimeMsg.emplace_back(c_buff);
 }

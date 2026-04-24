@@ -1,9 +1,13 @@
 #pragma once
 
+#include <NvInfer.h>
+// #include <NvOnnxParser.h>
+
 #include <string>
 
 #include "include/utils/Logger.h"
 #include "include/utils/Timer.h"
+#include "include/common/ModelParam.h"
 
 /// @brief TensorRT 资源释放模板函数
 /// @tparam T 

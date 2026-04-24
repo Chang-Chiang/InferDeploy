@@ -24,4 +24,4 @@ private:
     int         m_iOutputSize;
 };
 
-std::shared_ptr<Classifier> MakeClassifier(std::string strOnnxPath, Level cLevel, Params cParams);
+std::shared_ptr<YoloClassifier> MakeClassifier(std::string strOnnxPath, Level cLevel, Params cParams);

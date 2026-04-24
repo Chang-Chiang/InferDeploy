@@ -1,17 +1,18 @@
 #include "include/utils/Process.h"
+#include "include/utils/Logger.h"
 
 TransInfo    cTransInfo;
 AffineMatrix cAffineMatrix;
 
 void WarpAffineInit(int iSrcH, int iSrcW, int iTarH, int iTarW) {
-    cTransInfo.src_h = iSrcH;
-    cTransInfo.src_w = iSrcW;
-    cTransInfo.tar_h = iTarH;
-    cTransInfo.tar_w = iTarW;
+    cTransInfo.m_iSrcHeight = iSrcH;
+    cTransInfo.m_iSrcWidth = iSrcW;
+    cTransInfo.m_iTargetHeight = iTarH;
+    cTransInfo.m_iTargetWidth = iTarW;
     cAffineMatrix.Init(cTransInfo);
 }
 
-__host__ __device__ void AffineTransformation(
+HOST_DEVICE void AffineTransformation(
     float arrTransMatrix[6], 
     int iSrcX, int iSrcY, 
     float* pTarX, float* pTarY)
@@ -245,7 +246,7 @@ __global__ void Bilinear_BGR2RGB_NHWC2NCHW_Kernel(
     }
 }
 
-__global__ void Bilinear_BGR2RGB_NHWC2NCHW_Shift_Norm_Kernel(
+__global__ void Bilinear_BGR2RGB_NHWC2NCHW_Shift_Kernel(
     float* pTar, uint8_t* pSrc, 
     int iTarW, int iTarH, 
     int iSrcW, int iSrcH, 
@@ -312,14 +313,14 @@ __global__ void WarpAffine_BGR2RGB_Kernel(
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
 
-    affine_transformation(cAffineMatrix.reverse, x + 0.5, y + 0.5, &i_src_x, &i_src_y);
+    AffineTransformation(cAffineMatrix.m_arrReverse, x + 0.5, y + 0.5, &i_src_x, &i_src_y);
 
     int i_src_x1 = floor(i_src_x - 0.5);
     int i_src_y1 = floor(i_src_y - 0.5);
     int i_src_x2 = i_src_x1 + 1;
     int i_src_y2 = i_src_y1 + 1;
 
-    if (i_src_y1 < 0 || i_src_x1 < 0 || i_src_y2 > cTransInfo.src_h || i_src_x2 > cTransInfo.src_w) {
+    if (i_src_y1 < 0 || i_src_x1 < 0 || i_src_y2 > cTransInfo.m_iSrcHeight || i_src_x2 > cTransInfo.m_iSrcWidth) {
 
     }
     else {
@@ -331,13 +332,13 @@ __global__ void WarpAffine_BGR2RGB_Kernel(
         float f_a2_1 = (1.0 - f_tw) * f_th;
         float f_a2_2 = f_tw * f_th;
 
-        int i_src_idx1_1 = (i_src_y1 * cTransInfo.src_w + i_src_x1) * 3;
-        int i_src_idx1_2 = (i_src_y1 * cTransInfo.src_w + i_src_x2) * 3;
-        int i_src_idx2_1 = (i_src_y2 * cTransInfo.src_w + i_src_x1) * 3;
-        int i_src_idx2_2 = (i_src_y2 * cTransInfo.src_w + i_src_x2) * 3;
+        int i_src_idx1_1 = (i_src_y1 * cTransInfo.m_iSrcWidth + i_src_x1) * 3;
+        int i_src_idx1_2 = (i_src_y1 * cTransInfo.m_iSrcWidth + i_src_x2) * 3;
+        int i_src_idx2_1 = (i_src_y2 * cTransInfo.m_iSrcWidth + i_src_x1) * 3;
+        int i_src_idx2_2 = (i_src_y2 * cTransInfo.m_iSrcWidth + i_src_x2) * 3;
 
-        int i_tar_idx    = y * cTransInfo.tar_w  + x;
-        int i_tar_area   = cTransInfo.tar_w * cTransInfo.tar_h;
+        int i_tar_idx    = y * cTransInfo.m_iTargetWidth  + x;
+        int i_tar_area   = cTransInfo.m_iTargetWidth * cTransInfo.m_iTargetHeight;
 
         pTar[i_tar_idx + i_tar_area * 0] = 
             round((f_a1_1 * pSrc[i_src_idx1_1 + 2] + 
@@ -369,30 +370,30 @@ void ResizeBilinearGpu(
     dim3 dim_block(32, 32, 1);
     dim3 dim_grid(iTarW / 32 + 1, iTarH / 32 + 1, 1);
 
-    float fScaledH = (float)iSrcH / iTarH;
-    float fScaledW = (float)iSrcW / iTarW;
-    float scale = (fScaledH > fScaledW ? fScaledH : fScaledW);
+    float f_scaled_h = (float)iSrcH / iTarH;
+    float f_scaled_w = (float)iSrcW / iTarW;
+    float f_scale = (f_scaled_h > f_scaled_w ? f_scaled_h : f_scaled_w);
 
     switch (eTac) {
     case InterpolationTactics::GPU_NEAREST:
-        nearest_BGR2RGB_nhwc2nchw_norm_kernel 
+        Nearest_BGR2RGB_NHWC2NCHW_Norm_Kernel 
                 <<<dim_grid, dim_block>>>
-                (pDeviceTar, pDeviceSrc, iTarW, iTarH, iSrcW, iSrcH, fScaledW, fScaledH, arrMean, arrStd);
+                (pDeviceTar, pDeviceSrc, iTarW, iTarH, iSrcW, iSrcH, f_scaled_w, f_scaled_h, arrMean, arrStd);
         break;
     case InterpolationTactics::GPU_NEAREST_CENTER:
-        nearest_BGR2RGB_nhwc2nchw_norm_kernel 
+        Nearest_BGR2RGB_NHWC2NCHW_Norm_Kernel 
                 <<<dim_grid, dim_block>>>
-                (pDeviceTar, pDeviceSrc, iTarW, iTarH, iSrcW, iSrcH, scale, scale, arrMean, arrStd);
+                (pDeviceTar, pDeviceSrc, iTarW, iTarH, iSrcW, iSrcH, f_scale, f_scale, arrMean, arrStd);
         break;
     case InterpolationTactics::GPU_BILINEAR:
-        bilinear_BGR2RGB_nhwc2nchw_norm_kernel 
+        Bilinear_BGR2RGB_NHWC2NCHW_Norm_Kernel 
                 <<<dim_grid, dim_block>>> 
-                (pDeviceTar, pDeviceSrc, iTarW, iTarH, iSrcW, iSrcH, fScaledW, fScaledH, arrMean, arrStd);
+                (pDeviceTar, pDeviceSrc, iTarW, iTarH, iSrcW, iSrcH, f_scaled_w, f_scaled_h, arrMean, arrStd);
         break;
     case InterpolationTactics::GPU_BILINEAR_CENTER:
-        bilinear_BGR2RGB_nhwc2nchw_shift_norm_kernel 
+        Bilinear_BGR2RGB_NHWC2NCHW_Shift_Norm_Kernel 
                 <<<dim_grid, dim_block>>> 
-                (pDeviceTar, pDeviceSrc, iTarW, iTarH, iSrcW, iSrcH, scale, scale, arrMean, arrStd);
+                (pDeviceTar, pDeviceSrc, iTarW, iTarH, iSrcW, iSrcH, f_scale, f_scale, arrMean, arrStd);
         break;
     default:
         LOGE("ERROR: Wrong GPU resize InterpolationTactics selected. Program terminated");
@@ -409,30 +410,30 @@ void ResizeBilinearGpu(
     dim3 dim_block(32, 32, 1);
     dim3 dim_grid(iTarW / 32 + 1, iTarH / 32 + 1, 1);
 
-    float fScaledH = (float)iSrcH / iTarH;
-    float fScaledW = (float)iSrcW / iTarW;
-    float scale = (fScaledH > fScaledW ? fScaledH : fScaledW);
+    float f_scaled_h = (float)iSrcH / iTarH;
+    float f_scaled_w = (float)iSrcW / iTarW;
+    float f_scale = (f_scaled_h > f_scaled_w ? f_scaled_h : f_scaled_w);
 
     switch (eTac) {
     case InterpolationTactics::GPU_NEAREST:
-        nearest_BGR2RGB_nhwc2nchw_kernel <<<dim_grid, dim_block>>>
-                (pDeviceTar, pDeviceSrc, iTarW, iTarH, iSrcW, iSrcH, fScaledW, fScaledH);
+        Nearest_BGR2RGB_NHWC2NCHW_Kernel <<<dim_grid, dim_block>>>
+                (pDeviceTar, pDeviceSrc, iTarW, iTarH, iSrcW, iSrcH, f_scaled_w, f_scaled_h);
         break;
     case InterpolationTactics::GPU_NEAREST_CENTER:
-        nearest_BGR2RGB_nhwc2nchw_kernel <<<dim_grid, dim_block>>>
-                (pDeviceTar, pDeviceSrc, iTarW, iTarH, iSrcW, iSrcH, scale, scale);
+        Nearest_BGR2RGB_NHWC2NCHW_Kernel <<<dim_grid, dim_block>>>
+                (pDeviceTar, pDeviceSrc, iTarW, iTarH, iSrcW, iSrcH, f_scale, f_scale);
         break;
     case InterpolationTactics::GPU_BILINEAR:
-        bilinear_BGR2RGB_nhwc2nchw_kernel <<<dim_grid, dim_block>>> 
-                (pDeviceTar, pDeviceSrc, iTarW, iTarH, iSrcW, iSrcH, fScaledW, fScaledH);
+        Bilinear_BGR2RGB_NHWC2NCHW_Kernel <<<dim_grid, dim_block>>> 
+                (pDeviceTar, pDeviceSrc, iTarW, iTarH, iSrcW, iSrcH, f_scaled_w, f_scaled_h);
         break;
     case InterpolationTactics::GPU_BILINEAR_CENTER:
-        bilinear_BGR2RGB_nhwc2nchw_shift_kernel <<<dim_grid, dim_block>>> 
-                (pDeviceTar, pDeviceSrc, iTarW, iTarH, iSrcW, iSrcH, scale, scale);
+        Bilinear_BGR2RGB_NHWC2NCHW_Shift_Kernel <<<dim_grid, dim_block>>> 
+                (pDeviceTar, pDeviceSrc, iTarW, iTarH, iSrcW, iSrcH, f_scale, f_scale);
         break;
     case InterpolationTactics::GPU_WARP_AFFINE:
-        warpaffine_init(iSrcH, iSrcW, iTarH, iTarW);
-        warpaffine_BGR2RGB_kernel <<<dim_grid, dim_block>>> 
+        WarpAffineInit(iSrcH, iSrcW, iTarH, iTarW);
+        WarpAffine_BGR2RGB_Kernel <<<dim_grid, dim_block>>> 
                 (pDeviceTar, pDeviceSrc, cTransInfo, cAffineMatrix);
         break;
     default:
