@@ -27,8 +27,8 @@ struct Bbox {
 class YoloDetector : public InferTRT{
 
 public:
-    YoloDetector(std::string strOnncPath, Level cLevel, Params cParams)
-        : InferTRT(strOnncPath, cLevel, cParams) {};
+    YoloDetector(std::string strOnnxPath, Level cLevel, Params cParams)
+        : InferTRT(strOnnxPath, cLevel, cParams) {};
 
 public:
     virtual void Setup(void const* pData, std::size_t iSize) override;
