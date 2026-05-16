@@ -4,6 +4,20 @@
 #include <vector>
 #include <string>
 
+/*
+ * 自定义一个calibrator类
+ * 在创建calibrator的时候需要继承nvinfer1中的calibrator类
+ * TensorRT提供了五种Calibrator类
+ *
+ *   - nvinfer1::IInt8EntropyCalibrator2
+ *   - nvinfer1::IInt8MinMaxCalibrator
+ *   - nvinfer1::IInt8EntropyCalibrator
+ *   - nvinfer1::IInt8LegacyCalibrator
+ *   - nvinfer1::IInt8Calibrator
+ *
+ * 默认下推荐使用IInt8EntropyCalibrator2
+*/
+// class Int8EntropyCalibrator: public nvinfer1::IInt8MinMaxCalibrator {
 class Int8EntropyCalibrator: public nvinfer1::IInt8EntropyCalibrator2 {
 public:
     Int8EntropyCalibrator(

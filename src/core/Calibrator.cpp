@@ -40,15 +40,14 @@ bool Int8EntropyCalibrator::getBatch(
     
 
     cv::Mat mat_input_image;
-    float arr_mean[]       = {0.406, 0.456, 0.485};
-    float arr_std[]        = {0.225, 0.224, 0.229};
+
     for (int i = 0; i < m_iBatchSize; i ++){
         mat_input_image = cv::imread(m_vecImageList.at(m_iImageIndex++));
         ResizeGpu(
             mat_input_image, 
             m_pDeviceInput + i * m_iInputSize,
             m_iInputH, m_iInputW, 
-            arr_mean, arr_std, InterpolationTactics::GPU_BILINEAR);
+            InterpolationTactics::GPU_BILINEAR_CENTER);
     }
 
     pBindings[0] = m_pDeviceInput;

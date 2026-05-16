@@ -4,6 +4,7 @@
 #include "include/utils/FileUtil.h"
 
 #include <NvOnnxParser.h>
+#include <unistd.h>
 
 InferTRT::InferTRT(std::string strOnnxPath, Level cLevel, Params cParams) {
     m_strOnnxPath    = strOnnxPath;
@@ -46,16 +47,53 @@ void InferTRT::InitModel() {
 
 bool InferTRT::BuildEngine() {
     auto p_builder = std::shared_ptr<nvinfer1::IBuilder>(nvinfer1::createInferBuilder(*m_pLogger), DestroyTrtPtr<nvinfer1::IBuilder>);
-    auto p_network = std::shared_ptr<nvinfer1::INetworkDefinition>(p_builder->createNetworkV2(1), DestroyTrtPtr<nvinfer1::INetworkDefinition>);
-    auto p_config  = std::shared_ptr<nvinfer1::IBuilderConfig>(p_builder->createBuilderConfig(), DestroyTrtPtr<nvinfer1::IBuilderConfig>);
-    auto p_parser  = std::shared_ptr<nvonnxparser::IParser>(nvonnxparser::createParser(*p_network, *m_pLogger), DestroyTrtPtr<nvonnxparser::IParser>);
-
-    p_config->setMaxWorkspaceSize(m_iWorkspaceSize);
-    p_config->setProfilingVerbosity(nvinfer1::ProfilingVerbosity::kDETAILED); //这里也可以设置为kDETAIL;
-
-    if (!p_parser->parseFromFile(m_strOnnxPath.c_str(), 1)) {
+    if (!p_builder) {
+        LOGE("Failed to create TensorRT builder");
         return false;
     }
+
+    auto p_network = std::shared_ptr<nvinfer1::INetworkDefinition>(p_builder->createNetworkV2(1), DestroyTrtPtr<nvinfer1::INetworkDefinition>);
+    if (!p_network) {
+        LOGE("Failed to create TensorRT network");
+        return false;
+    }
+
+    auto p_config  = std::shared_ptr<nvinfer1::IBuilderConfig>(p_builder->createBuilderConfig(), DestroyTrtPtr<nvinfer1::IBuilderConfig>);
+    if (!p_config) {
+        LOGE("Failed to create TensorRT builder config");
+        return false;
+    }
+
+    auto p_parser  = std::shared_ptr<nvonnxparser::IParser>(nvonnxparser::createParser(*p_network, *m_pLogger), DestroyTrtPtr<nvonnxparser::IParser>);
+    if (!p_parser) {
+        LOGE("Failed to create ONNX parser");
+        return false;
+    }
+
+    p_config->setMaxWorkspaceSize(m_iWorkspaceSize);
+    p_config->setProfilingVerbosity(nvinfer1::ProfilingVerbosity::kDETAILED);
+
+    if (!p_parser->parseFromFile(m_strOnnxPath.c_str(), 1)) {
+        LOGE("Failed to parse ONNX file: %s", m_strOnnxPath.c_str());
+        // Count errors in parsing
+        int nerror = p_parser->getNbErrors();
+        for (int i = 0; i < nerror; ++i) {
+            auto error = p_parser->getError(i);
+            LOGE("ONNX Parser Error: %s", error->desc());
+        }
+        return false;
+    }
+
+    // Auto-detect input dimensions from parsed network
+    auto input = p_network->getInput(0);
+    auto dims = input->getDimensions();
+    int iInputC = dims.d[0];  // channels
+    int iInputH = dims.d[1];  // height
+    int iInputW = dims.d[2];  // width
+
+    // Update Params with auto-detected dimensions
+    m_pParams->m_cImgInfo = {iInputH, iInputW, iInputC};
+    LOG("Auto-detected input shape: %d x %d x %d", iInputC, iInputH, iInputW);
 
     if (p_builder->platformHasFastFp16() && m_pParams->m_ePrec == FP16) {
         p_config->setFlag(nvinfer1::BuilderFlag::kFP16);
@@ -64,20 +102,39 @@ bool InferTRT::BuildEngine() {
     else if (p_builder->platformHasFastInt8() && m_pParams->m_ePrec == INT8) {
         p_config->setFlag(nvinfer1::BuilderFlag::kINT8);
         p_config->setFlag(nvinfer1::BuilderFlag::kPREFER_PRECISION_CONSTRAINTS);
+
+        // Use auto-detected dimensions from Params
+        int iInputC = m_pParams->m_cImgInfo.m_iChannel;
+        int iInputH = m_pParams->m_cImgInfo.m_iHeight;
+        int iInputW = m_pParams->m_cImgInfo.m_iWidth;
+
+        std::shared_ptr<Int8EntropyCalibrator> p_calibrator(
+            new Int8EntropyCalibrator(
+                4,
+                "../calibration/calibration_list.txt",
+                "../calibration_table.txt",
+                iInputC * iInputH * iInputW, iInputW, iInputH));
+
+        p_config->setInt8Calibrator(p_calibrator.get());
     }
 
-    std::shared_ptr<Int8EntropyCalibrator> p_calibrator(
-        new Int8EntropyCalibrator(
-            4, 
-            "calibration/calibration_list_coco.txt", 
-            "calibration/calibration_table.txt",
-            3 * 224 * 224, 224, 224));
-
-    p_config->setInt8Calibrator(p_calibrator.get());
-
     auto p_engine  = std::shared_ptr<nvinfer1::ICudaEngine>(p_builder->buildEngineWithConfig(*p_network, *p_config), DestroyTrtPtr<nvinfer1::ICudaEngine>);
-    auto plan      = p_builder->buildSerializedNetwork(*p_network, *p_config);
+    if (!p_engine) {
+        LOGE("Failed to build TensorRT engine");
+        return false;
+    }
+
+    auto plan = p_engine->serialize();
+    if (!plan) {
+        LOGE("Failed to serialize TensorRT engine");
+        return false;
+    }
+
     auto p_runtime = std::shared_ptr<nvinfer1::IRuntime>(nvinfer1::createInferRuntime(*m_pLogger), DestroyTrtPtr<nvinfer1::IRuntime>);
+    if (!p_runtime) {
+        LOGE("Failed to create TensorRT runtime");
+        return false;
+    }
 
     SavePlan(*plan);
 
@@ -107,9 +164,34 @@ bool InferTRT::LoadEngine() {
 }
 
 void InferTRT::SavePlan(nvinfer1::IHostMemory& plan) {
-    auto f = fopen(m_strEnginePath.c_str(), "wb");
+    // Resolve absolute path to avoid relative path issues
+    std::string strAbsPath = m_strEnginePath;
+    if (m_strEnginePath.find("../") == 0) {
+        // Convert relative path to absolute
+        char szCurrDir[1024];
+        if (getcwd(szCurrDir, sizeof(szCurrDir)) != nullptr) {
+            strAbsPath = std::string(szCurrDir) + "/" + m_strEnginePath;
+        }
+    }
+
+    // Extract directory from absolute path
+    std::string strDir = strAbsPath.substr(0, strAbsPath.find_last_of("/"));
+    if (!IsFileExist(strDir)) {
+        LOG("Creating engine directory: %s", strDir.c_str());
+        if (!CreateDir(strDir)) {
+            LOGE("Failed to create engine directory: %s", strDir.c_str());
+            return;
+        }
+    }
+
+    auto f = fopen(strAbsPath.c_str(), "wb");
+    if (!f) {
+        LOGE("Failed to open engine file for writing: %s", strAbsPath.c_str());
+        return;
+    }
     fwrite(plan.data(), 1, plan.size(), f);
     fclose(f);
+    LOG("Engine saved to: %s", strAbsPath.c_str());
 }
 
 void InferTRT::Inference() {

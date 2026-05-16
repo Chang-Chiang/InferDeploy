@@ -2,6 +2,7 @@
 
 #include "include/tasks/YoloClassifier.h"
 #include "include/tasks/YoloDetector.h"
+#include "include/tasks/YoloMultitask.h"
 
 class Worker {
 public:
@@ -13,6 +14,7 @@ public:
     std::shared_ptr<Params>          m_pParams;
     std::shared_ptr<YoloClassifier>  m_pYoloClassifier;
     std::shared_ptr<YoloDetector>    m_pYoloDetector;
+    std::shared_ptr<YoloMultitask>   m_pYoloMultitask;
     std::vector<float>               m_vecScore;
     std::vector<Bbox>                m_vecBbox;
 };

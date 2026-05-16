@@ -1,28 +1,8 @@
 #pragma once
 
 #include "include/core/InferTRT.h"
+#include "include/tasks/TaskUtils.h"
 
-enum ModelType {
-    YOLOV5,
-    YOLOV8
-};
-
-struct Bbox {
-    float m_fX0, m_fX1, m_fY0, m_fY1;
-    float m_fConfidence;
-    bool  m_bFlgRemove;
-    int   m_iLabel;
-    
-    Bbox() = default;
-    Bbox(float fX0, float fY0, float fX1, float fY1, float fConfidence, int iLabel)
-        : m_fX0(fX0)
-        , m_fY0(fY0)
-        , m_fX1(fX1)
-        , m_fY1(fY1)
-        , m_fConfidence(fConfidence)
-        , m_bFlgRemove(false)
-        , m_iLabel(iLabel){};
-};
 
 class YoloDetector : public InferTRT{
 

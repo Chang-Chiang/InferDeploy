@@ -3,6 +3,8 @@
 
 bool IsFileExist(const std::string strFileName);
 
+bool CreateDir(const std::string strDir);
+
 bool IsFileReadSuccess(const std::string &strPath, std::vector<unsigned char> &vecData, size_t &iSize);
 
 std::string GetFileType(std::string strFilePath);

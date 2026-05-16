@@ -42,4 +42,6 @@
 
 build
 bin
-data/models/onnx/*.onnx
+*.onnx
+*.pt
+*.engine

@@ -4,24 +4,6 @@
 #include "include/utils/CudaCheck.h"
 #include "include/utils/FileUtil.h"
 
-float IouCalc(Bbox cBbox1, Bbox cBbox2) {
-    auto f_inter_x0 = std::max(cBbox1.m_fX0, cBbox2.m_fX0);
-    auto f_inter_y0 = std::max(cBbox1.m_fY0, cBbox2.m_fY0);
-    auto f_inter_x1 = std::min(cBbox1.m_fX1, cBbox2.m_fX1);
-    auto f_inter_y1 = std::min(cBbox1.m_fY1, cBbox2.m_fY1);
-
-    float f_inter_w = f_inter_x1 - f_inter_x0;
-    float f_inter_h = f_inter_y1 - f_inter_y0;
-    
-    float f_inter_area = f_inter_w * f_inter_h;
-    float f_union_area = 
-        (cBbox1.m_fX1 - cBbox1.m_fX0) * (cBbox1.m_fY1 - cBbox1.m_fY0) + 
-        (cBbox2.m_fX1 - cBbox2.m_fX0) * (cBbox2.m_fY1 - cBbox2.m_fY0) - 
-        f_inter_area;
-    
-    return f_inter_area / f_union_area;
-}
-
 
 void YoloDetector::Setup(void const* pData, size_t iSize) {
     m_pRuntime     = std::shared_ptr<nvinfer1::IRuntime>(nvinfer1::createInferRuntime(*m_pLogger), DestroyTrtPtr<nvinfer1::IRuntime>);
@@ -86,12 +68,31 @@ bool YoloDetector::PreprocessCpu() {
     int i_offset_ch0 = m_iImgArea * 0;
     int i_offset_ch1 = m_iImgArea * 1;
     int i_offset_ch2 = m_iImgArea * 2;
-    for (int i = 0; i < m_nvInputDims.d[2]; i++) {
-        for (int j = 0; j < m_nvInputDims.d[3]; j++) {
-            i_idx = i * m_nvInputDims.d[3] * m_nvInputDims.d[1] + j * m_nvInputDims.d[1];
-            m_pInputMemory[0][i_offset_ch2++] = mat_tar.data[i_idx + 0] / 255.0f;
-            m_pInputMemory[0][i_offset_ch1++] = mat_tar.data[i_idx + 1] / 255.0f;
-            m_pInputMemory[0][i_offset_ch0++] = mat_tar.data[i_idx + 2] / 255.0f;
+    
+    // 添加边界检查以避免数组越界
+    int i_height = m_nvInputDims.d[2];
+    int i_width = m_nvInputDims.d[3];
+    int i_channel = m_nvInputDims.d[1];
+    
+    if(i_height != i_target_h || i_width != i_target_w) {
+        LOGW("Warning: Input dimensions mismatch. Expected: %dx%d, Got: %dx%d", 
+             i_target_w, i_target_h, i_width, i_height);
+        // 更新目标尺寸以匹配模型实际输入尺寸
+        i_height = m_nvInputDims.d[2];
+        i_width = m_nvInputDims.d[3];
+    }
+    
+    for (int i = 0; i < i_height; i++) {
+        for (int j = 0; j < i_width; j++) {
+            i_idx = i * i_width * i_channel + j * i_channel;
+            
+            // 确保不会超出mat_tar的边界
+            int pixel_idx = (i * i_width + j) * 3;
+            if(pixel_idx + 2 < mat_tar.total() * mat_tar.channels()) {
+                m_pInputMemory[0][i_offset_ch2++] = mat_tar.data[pixel_idx + 0] / 255.0f;
+                m_pInputMemory[0][i_offset_ch1++] = mat_tar.data[pixel_idx + 1] / 255.0f;
+                m_pInputMemory[0][i_offset_ch0++] = mat_tar.data[pixel_idx + 2] / 255.0f;
+            }
         }
     }
 
@@ -110,8 +111,24 @@ bool YoloDetector::PreprocessGpu() {
 
     m_pTimer->StartGpu();
 
+    // 确保模型已经初始化，获取正确的输入维度
+    if(m_nvInputDims.nbDims == 0) {
+        LOGE("ERROR: Model not initialized properly!"); 
+        return false;
+    }
+    
+    int target_h = m_pParams->m_cImgInfo.m_iHeight;
+    int target_w = m_pParams->m_cImgInfo.m_iWidth;
+    
+    // 如果模型有指定输入尺寸，则使用模型的尺寸
+    if(m_nvInputDims.nbDims >= 3) {
+        // 注意：对于某些模型，维度顺序可能是 NCHW 或 NHWC
+        target_h = m_nvInputDims.d[2];
+        target_w = m_nvInputDims.d[3];
+    }
+
     ResizeGpu(m_matInputImage, m_pInputMemory[1],
-              m_pParams->m_cImgInfo.m_iHeight, m_pParams->m_cImgInfo.m_iWidth, 
+              target_h, target_w, 
               InterpolationTactics::GPU_WARP_AFFINE);
 
     m_pTimer->StopGpu("preprocess(GPU)");
@@ -136,9 +153,29 @@ bool YoloDetector::PostprocessCpu() {
     float  f_x0, f_y0, f_x1, f_y1;
     int    i_label;
 
+    // 添加边界检查
+    if(i_box_cnt <= 0 || i_class_cnt <= 0) {
+        LOGE("Invalid output dimensions: boxes=%d, classes=%d", i_box_cnt, i_class_cnt);
+        return false;
+    }
+
     for (int i = 0; i < i_box_cnt; i ++) {
         p_tensor = m_pOutputMemory[0] + i * m_nvOutputDims.d[2];
+        
+        // 检查是否有足够的类别数量
+        if (i_class_cnt <= 0) {
+            LOGE("Invalid class count: %d", i_class_cnt);
+            return false;
+        }
+        
         i_label  = std::max_element(p_tensor + 4, p_tensor + 4 + i_class_cnt) - (p_tensor + 4);
+        
+        // 检查标签索引是否有效
+        if (i_label < 0 || i_label >= i_class_cnt) {
+            LOGE("Invalid label index: %d, max allowed: %d", i_label, i_class_cnt-1);
+            continue;
+        }
+        
         f_conf   = p_tensor[4 + i_label];
         if (f_conf < f_conf_threshold) {
             continue;
@@ -153,6 +190,15 @@ bool YoloDetector::PostprocessCpu() {
         f_y0 = f_cy - f_h / 2;
         f_x1 = f_x0 + f_w;
         f_y1 = f_y0 + f_h;
+
+        // 边界检查，确保坐标在合理范围内
+        int img_width = m_matInputImage.cols;
+        int img_height = m_matInputImage.rows;
+        
+        f_x0 = std::max(0.0f, std::min(static_cast<float>(img_width), f_x0));
+        f_y0 = std::max(0.0f, std::min(static_cast<float>(img_height), f_y0));
+        f_x1 = std::max(0.0f, std::min(static_cast<float>(img_width), f_x1));
+        f_y1 = std::max(0.0f, std::min(static_cast<float>(img_height), f_y1));
 
         AffineTransformation(cAffineMatrix.m_arrReverse, f_x0, f_y0, &f_x0, &f_y0);
         AffineTransformation(cAffineMatrix.m_arrReverse, f_x1, f_y1, &f_x1, &f_y1);
@@ -234,7 +280,7 @@ bool YoloDetector::PostprocessCpu() {
 
 
 bool YoloDetector::PostprocessGpu() {
-    return PostprocessGpu();
+    return PostprocessCpu();
 }
 
 

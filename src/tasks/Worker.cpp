@@ -10,6 +10,9 @@ Worker::Worker(std::string strModelPath, Level cLevel, Params cParams) {
     else if (cParams.m_eTask == DETECTION) {
         m_pYoloDetector = MakeDetector(strModelPath, cLevel, cParams);
     }
+    else if (cParams.m_eTask == MULTITASK) {
+        m_pYoloMultitask = MakeMultitask(strModelPath, cLevel, cParams);
+    }
 }
 
 void Worker::Inference(std::string strImagePath) {
@@ -23,6 +26,12 @@ void Worker::Inference(std::string strImagePath) {
         m_pYoloDetector->InitModel();
         m_pYoloDetector->LoadImage(strImagePath);
         m_pYoloDetector->Inference();
+    }
+
+    if (m_pYoloMultitask != nullptr) {
+        m_pYoloMultitask->InitModel();
+        m_pYoloMultitask->LoadImage(strImagePath);
+        m_pYoloMultitask->Inference();
     }
 }
 
