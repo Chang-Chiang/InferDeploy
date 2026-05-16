@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include "include/core/InferTRT.h"
 #include "include/tasks/TaskUtils.h"
 
@@ -26,5 +27,5 @@ private:
 };
 
 // 外部调用的接口
-std::shared_ptr<YoloDetector> MakeDetector(
+std::unique_ptr<YoloDetector> MakeDetector(
     std::string strOnnxPath, Level cLevel, Params cParams);

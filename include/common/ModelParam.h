@@ -2,6 +2,8 @@
 
 #include "include/utils/Process.h"
 
+// ONNX 解析器设置的 临时内存上限，用于 将 ONNX 模型转成 TRT 网络
+// 256 MB
 #define WORKSPACESIZE 1<<28
 
 /// @brief 任务类别

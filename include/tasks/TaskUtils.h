@@ -2,19 +2,21 @@
 
 #include <opencv2/opencv.hpp>
 
+/// @brief 模型类型
 enum ModelType {
     YOLOV5,
     YOLOV8
 };
 
+/// @brief 检测框结构体
 struct Bbox {
-    float     m_fX0, m_fX1, m_fY0, m_fY1;
-    float     m_fConfidence;
-    bool      m_bFlgRemove;
-    int       m_iLabel;
-    cv::Rect  m_cvRect;
-    cv::Mat   m_matBoxMask;
-    cv::Mat   m_matMc;
+    float     m_fX0, m_fX1, m_fY0, m_fY1;  // 检测框坐标，左上角 (X0, Y0)，右下角 (X1, Y1)
+    float     m_fConfidence;               // 检测框置信度
+    bool      m_bFlgRemove;                // 检测框是否被删除标识
+    int       m_iLabel;                    // 检测框类别
+    cv::Rect  m_cvRect;                    // 检测框对应的矩形框
+    cv::Mat   m_matBoxMask;                // 检测框对应的掩码，用于分割任务
+    cv::Mat   m_matMc;                     // 检测框对应的 MC，用于分割任务
     
     Bbox() = default;
 

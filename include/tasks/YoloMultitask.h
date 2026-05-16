@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include "include/core/InferTRT.h"
 #include "include/tasks/TaskUtils.h"
 
@@ -33,5 +34,5 @@ private:
     nvinfer1::Dims m_nvSegmentDims;
 };
 
-std::shared_ptr<YoloMultitask> MakeMultitask(
+std::unique_ptr<YoloMultitask> MakeMultitask(
     std::string strOnnxPath, Level cLevel, Params cParams);

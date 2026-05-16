@@ -1,9 +1,9 @@
+#include <memory>
 #include "include/tasks/Worker.h"
 #include "include/common/ModelCfg.h"
 
-Worker::Worker(std::string strModelPath, Level cLevel, Params cParams) {
-    m_pLogger = CreateLogger(cLevel);
-
+Worker::Worker(std::string strModelPath, Level cLevel, Params cParams)
+    : m_cParams(cParams) {
     if (cParams.m_eTask == CLASSIFICATION) {
         m_pYoloClassifier = MakeClassifier(strModelPath, cLevel, cParams);
     }

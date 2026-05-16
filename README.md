@@ -142,7 +142,7 @@ p_worker->Inference(str_img_path);
 classDiagram
 class Worker {
     - m_pLogger : std::shared_ptr<Logger>
-    - m_pParams : std::shared_ptr<Params>
+    - m_cParams : Params
     - m_pClassifier : std::shared_ptr<Classifier>
     - m_pDetector : std::shared_ptr<Detector>
     - m_pMultitask : std::shared_ptr<Multitask>
@@ -181,7 +181,7 @@ class Model {
     - m_strOnnxPath : std::string
     - m_strEnginePath : std::string
     - m_matInputImage : cv::Mat
-    - *m_pParams : Params
+    - *m_cParams : Params
     - m_iWorkspaceSize : int
     - *m_pBindings[3] : float
     - *m_pInputMemory[2] : float

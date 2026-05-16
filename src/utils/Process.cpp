@@ -20,10 +20,10 @@ cv::Mat ResizeCpu(
     i_resize_w     = iTarW;
     i_resize_h     = iTarH;
 
-    /*BGR2RGB*/
+    // BGR2RGB
     cv::cvtColor(matSrc, matSrc, cv::COLOR_BGR2RGB);
 
-    /*Resize*/
+    // Resize
     switch (eInterpolation) {
         case InterpolationTactics::CPU_NEAREST: 
             cv::resize(matSrc, mat_tar, cv::Size(i_resize_w, i_resize_h), 0, 0, cv::INTER_LINEAR);
@@ -38,7 +38,6 @@ cv::Mat ResizeCpu(
     return mat_tar;
 }
 
-// 根据比例进行缩放 (GPU版本)
 void ResizeGpu(
     cv::Mat &matHostSrc, float* pDeviceTar, 
     const int& iTarH, const int& iTarW, 
@@ -47,10 +46,10 @@ void ResizeGpu(
 {
     float*   arr_mean = nullptr;
     float*   arr_std  = nullptr;
-    uint8_t* d_src  = nullptr;
+    uint8_t* d_src    = nullptr;
 
-    int i_height   = matHostSrc.rows;
-    int i_width    = matHostSrc.cols;
+    int i_height = matHostSrc.rows;
+    int i_width  = matHostSrc.cols;
     int chan     = 3;
 
     int src_size  = i_height * i_width * chan * sizeof(uint8_t);

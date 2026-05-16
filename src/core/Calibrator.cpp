@@ -38,10 +38,11 @@ bool Int8EntropyCalibrator::getBatch(
     LOG("%3d/%3d (%3dx%3d): %s", 
         m_iImageIndex + 1, m_vecImageList.size(), m_iInputH, m_iInputW, m_vecImageList.at(m_iImageIndex).c_str());
     
-
+    // 对 batch 中的每张图像进行预处理
+    // 不同 task 预处理不同
+    // TODO 封装为函数
     cv::Mat mat_input_image;
-
-    for (int i = 0; i < m_iBatchSize; i ++){
+    for (int i = 0; i < m_iBatchSize; i++) {
         mat_input_image = cv::imread(m_vecImageList.at(m_iImageIndex++));
         ResizeGpu(
             mat_input_image, 

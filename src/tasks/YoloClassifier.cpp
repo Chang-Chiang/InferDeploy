@@ -6,17 +6,17 @@
 #include <memory>
 
 void YoloClassifier::Setup(void const* pData, size_t iSize) {
-    m_pRuntime     = std::shared_ptr<nvinfer1::IRuntime>(nvinfer1::createInferRuntime(*m_pLogger), DestroyTrtPtr<nvinfer1::IRuntime>);
-    m_pEngine      = std::shared_ptr<nvinfer1::ICudaEngine>(m_pRuntime->deserializeCudaEngine(pData, iSize), DestroyTrtPtr<nvinfer1::ICudaEngine>);
-    m_pContext     = std::shared_ptr<nvinfer1::IExecutionContext>(m_pEngine->createExecutionContext(), DestroyTrtPtr<nvinfer1::IExecutionContext>);
+    m_pRuntime     = TrtUniquePtr<nvinfer1::IRuntime>(nvinfer1::createInferRuntime(m_cLogger));
+    m_pEngine      = TrtUniquePtr<nvinfer1::ICudaEngine>(m_pRuntime->deserializeCudaEngine(pData, iSize));
+    m_pContext     = TrtUniquePtr<nvinfer1::IExecutionContext>(m_pEngine->createExecutionContext());
     m_nvInputDims  = m_pContext->getBindingDimensions(0);
     m_nvOutputDims = m_pContext->getBindingDimensions(1);
 
     CUDA_CHECK(cudaStreamCreate(&m_cuStream));
     
-    m_iInputSize  = m_pParams->m_cImgInfo.m_iHeight * m_pParams->m_cImgInfo.m_iWidth * m_pParams->m_cImgInfo.m_iChannel * sizeof(float);
-    m_iOutputSize = m_pParams->m_iNumCls * sizeof(float);
-    m_iImgArea    = m_pParams->m_cImgInfo.m_iHeight * m_pParams->m_cImgInfo.m_iWidth;
+    m_iInputSize  = m_cParams.m_cImgInfo.m_iHeight * m_cParams.m_cImgInfo.m_iWidth * m_cParams.m_cImgInfo.m_iChannel * sizeof(float);
+    m_iOutputSize = m_cParams.m_iNumCls * sizeof(float);
+    m_iImgArea    = m_cParams.m_cImgInfo.m_iHeight * m_cParams.m_cImgInfo.m_iWidth;
 
     CUDA_CHECK(cudaMallocHost((void**)&m_pInputMemory[0], m_iInputSize));
     CUDA_CHECK(cudaMallocHost((void**)&m_pOutputMemory[0], m_iOutputSize));
@@ -30,7 +30,7 @@ void YoloClassifier::Setup(void const* pData, size_t iSize) {
 void YoloClassifier::ResetTask() {}
 
 bool YoloClassifier::PreprocessCpu() {
-
+    // 数据集三通道均值、方差
     float arr_mean[] = {0.406, 0.456, 0.485};
     float arr_std[]  = {0.225, 0.224, 0.229};
 
@@ -41,11 +41,12 @@ bool YoloClassifier::PreprocessCpu() {
         return false;
     }
 
-    m_pTimer->StartCpu();
+    m_cTimer.StartCpu();
 
     cv::resize(mat_input_image, mat_input_image, 
-               cv::Size(m_pParams->m_cImgInfo.m_iWidth, m_pParams->m_cImgInfo.m_iHeight), 0, 0, cv::INTER_LINEAR);
+               cv::Size(m_cParams.m_cImgInfo.m_iWidth, m_cParams.m_cImgInfo.m_iHeight), 0, 0, cv::INTER_LINEAR);
 
+    // normalize and convert to CHW
     int i_idx;
     int i_offset_ch0 = m_iImgArea * 0;
     int i_offset_ch1 = m_iImgArea * 1;
@@ -61,13 +62,13 @@ bool YoloClassifier::PreprocessCpu() {
 
     CUDA_CHECK(cudaMemcpyAsync(m_pInputMemory[1], m_pInputMemory[0], m_iInputSize, cudaMemcpyKind::cudaMemcpyHostToDevice, m_cuStream));
 
-    m_pTimer->StopCpu<Timer::ms>("preprocess(CPU)");
+    m_cTimer.StopCpu<Timer::ms>("preprocess(CPU)");
 
     return true;
 }
 
 bool YoloClassifier::PreprocessGpu() {
-
+    // 数据集三通道均值、标准差
     float arr_mean[] = {0.406, 0.456, 0.485};
     float arr_std[]  = {0.225, 0.224, 0.229};
 
@@ -77,37 +78,34 @@ bool YoloClassifier::PreprocessGpu() {
         LOGE("ERROR: file not founded! Program terminated"); return false;
     }
 
-    m_pTimer->StartGpu();
+    m_cTimer.StartGpu();
 
     ResizeGpu(mat_input_image, m_pInputMemory[1],
-              m_pParams->m_cImgInfo.m_iHeight, m_pParams->m_cImgInfo.m_iWidth,
+              m_cParams.m_cImgInfo.m_iHeight, m_cParams.m_cImgInfo.m_iWidth,
               arr_mean, arr_std,
               InterpolationTactics::GPU_BILINEAR);
 
-    m_pTimer->StopGpu("preprocess(GPU)");
+    m_cTimer.StopGpu("preprocess(GPU)");
     return true;
 }
 
 
 bool YoloClassifier::PostprocessCpu() {
 
-    m_pTimer->StartCpu();
+    m_cTimer.StartCpu();
 
-    int i_output_size = m_pParams->m_iNumCls * sizeof(float);
+    int i_output_size = m_cParams.m_iNumCls * sizeof(float);
     CUDA_CHECK(cudaMemcpyAsync(m_pOutputMemory[0], m_pOutputMemory[1], i_output_size, cudaMemcpyKind::cudaMemcpyDeviceToHost, m_cuStream));
     CUDA_CHECK(cudaStreamSynchronize(m_cuStream));
 
     ImageNetLabels c_labels;
-    int i_pos = std::max_element(m_pOutputMemory[0], m_pOutputMemory[0] + m_pParams->m_iNumCls) - m_pOutputMemory[0];
+    int i_pos = std::max_element(m_pOutputMemory[0], m_pOutputMemory[0] + m_cParams.m_iNumCls) - m_pOutputMemory[0];
     float f_confidence = m_pOutputMemory[0][i_pos] * 100;
 
-    m_pTimer->StopCpu<Timer::ms>("postprocess(CPU)");
+    m_cTimer.StopCpu<Timer::ms>("postprocess(CPU)");
 
     LOG("Result:     %s", c_labels.ImagenetLabelString(i_pos).c_str());   
     LOG("Confidence  %.3f%%", f_confidence);   
-
-    m_pTimer->Show();
-    printf("\n");
 
     return true;
 }
@@ -117,6 +115,6 @@ bool YoloClassifier::PostprocessGpu() {
     return PostprocessCpu();
 }
 
-std::shared_ptr<YoloClassifier> MakeClassifier(std::string strModelPath, Level cLevel, Params cParams) {
-    return std::make_shared<YoloClassifier>(strModelPath, cLevel, cParams);
+std::unique_ptr<YoloClassifier> MakeClassifier(std::string strModelPath, Level cLevel, Params cParams) {
+    return std::make_unique<YoloClassifier>(strModelPath, cLevel, cParams);
 }

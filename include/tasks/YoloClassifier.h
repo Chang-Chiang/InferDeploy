@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include "include/core/InferTRT.h"
 
 class YoloClassifier : public InferTRT {
@@ -24,4 +25,4 @@ private:
     int         m_iOutputSize;
 };
 
-std::shared_ptr<YoloClassifier> MakeClassifier(std::string strOnnxPath, Level cLevel, Params cParams);
+std::unique_ptr<YoloClassifier> MakeClassifier(std::string strOnnxPath, Level cLevel, Params cParams);

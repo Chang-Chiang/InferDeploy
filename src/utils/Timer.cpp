@@ -1,6 +1,7 @@
 #include "include/utils/Timer.h"
 #include "include/utils/Logger.h"
 #include "include/utils/CudaCheck.h"
+
 Timer::Timer() {
     m_fTimeElasped = 0;
     m_pointCpuStart = std::chrono::high_resolution_clock::now();
