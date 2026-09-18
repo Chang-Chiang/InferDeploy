@@ -1,0 +1,15 @@
+# build artifacts
+bin/
+*.o
+
+# generated test data (reproduce with tools/gen_test_data.py)
+data/slices/
+data/out/
+data/preview/
+data/*.u8
+data/meta.txt
+data/_importtest/
+
+# python
+__pycache__/
+*.pyc
