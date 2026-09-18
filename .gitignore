@@ -40,8 +40,16 @@
 # debug information files
 *.dwo
 
-build
-bin
+build/
+bin/
+deps/
+data/
+backup/
 *.onnx
 *.pt
 *.engine
+
+# Runtime artifacts
+engine/
+result/
+calibration_table.txt

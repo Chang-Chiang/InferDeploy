@@ -6,26 +6,19 @@
 #include <memory>
 
 
-void YoloDetector::Setup(void const* pData, size_t iSize) {
-    m_pRuntime     = TrtUniquePtr<nvinfer1::IRuntime>(nvinfer1::createInferRuntime(m_cLogger));
-    m_pEngine      = TrtUniquePtr<nvinfer1::ICudaEngine>(m_pRuntime->deserializeCudaEngine(pData, iSize));
-    m_pContext     = TrtUniquePtr<nvinfer1::IExecutionContext>(m_pEngine->createExecutionContext());
-    m_nvInputDims  = m_pContext->getBindingDimensions(0);
-    m_nvOutputDims = m_pContext->getBindingDimensions(1);
+void YoloDetector::SetupIoBuffers() {
+    m_nvInputDims  = m_vecInputs[0].dims;
+    m_nvOutputDims = m_vecOutputs[0].dims;
 
-    CUDA_CHECK(cudaStreamCreate(&m_cuStream));
-    
     m_iInputSize  = m_cParams.m_cImgInfo.m_iHeight * m_cParams.m_cImgInfo.m_iWidth * m_cParams.m_cImgInfo.m_iChannel * sizeof(float);
-    m_iOutputSize = m_cParams.m_iNumCls * sizeof(float);
+    // 检测模型输出为 [1, box_cnt, 4+cls_cnt]，按实际维度分配，而非 m_iNumCls
+    m_iOutputSize = m_nvOutputDims.d[1] * m_nvOutputDims.d[2] * sizeof(float);
     m_iImgArea    = m_cParams.m_cImgInfo.m_iHeight * m_cParams.m_cImgInfo.m_iWidth;
 
     CUDA_CHECK(cudaMallocHost((void**)&m_pInputMemory[0], m_iInputSize));
     CUDA_CHECK(cudaMallocHost((void**)&m_pOutputMemory[0], m_iOutputSize));
     CUDA_CHECK(cudaMalloc((void**)&m_pInputMemory[1], m_iInputSize));
     CUDA_CHECK(cudaMalloc((void**)&m_pOutputMemory[1], m_iOutputSize));
-
-    m_pBindings[0] = m_pInputMemory[1];
-    m_pBindings[1] = m_pOutputMemory[1];
 }
 
 void YoloDetector::ResetTask() {
@@ -36,53 +29,21 @@ bool YoloDetector::PreprocessCpu() {
 
     m_matInputImage = cv::imread(m_strImagePath);
     if (m_matInputImage.data == nullptr) {
-        LOGE("ERROR: Image file not founded! Program terminated"); 
+        LOGE("ERROR: Image file not founded! Program terminated");
         return false;
     }
 
     m_cTimer.StartCpu();
 
     // InferTRT BuildEngine 时已根据模型自动更新 m_cParams.m_cImgInfo
-    int   i_input_w  = m_matInputImage.cols;
-    int   i_input_h  = m_matInputImage.rows;
-    int   i_target_w = m_cParams.m_cImgInfo.m_iWidth;
-    int   i_target_h = m_cParams.m_cImgInfo.m_iHeight;
-    float f_scale    = std::min(float(i_target_w) / i_input_w, float(i_target_h) / i_input_h);
-    int   i_new_w    = int(i_input_w * f_scale);
-    int   i_new_h    = int(i_input_h * f_scale);
+    int i_input_h = m_matInputImage.rows;
+    int i_input_w = m_matInputImage.cols;
+    int i_target_w = m_cParams.m_cImgInfo.m_iWidth;
+    int i_target_h = m_cParams.m_cImgInfo.m_iHeight;
 
     WarpAffineInit(i_input_h, i_input_w, i_target_h, i_target_w);
-    
-    cv::Mat mat_tar(i_target_w, i_target_h, CV_8UC3, cv::Scalar(0, 0, 0));
-    cv::Mat mat_resized_img;
-    cv::resize(m_matInputImage, mat_resized_img, cv::Size(i_new_w, i_new_h));
 
-    int i_x, i_y;
-    i_x = (i_new_w < i_target_w) ? (i_target_w - i_new_w) / 2 : 0;
-    i_y = (i_new_h < i_target_h) ? (i_target_h - i_new_h) / 2 : 0;
-
-    cv::Rect roi(i_x, i_y, i_new_w, i_new_h);
-
-    cv::Mat mat_roi_tar = mat_tar(roi);
-    mat_resized_img.copyTo(mat_roi_tar);
-
-    int i_idx;
-    int i_offset_ch0 = m_iImgArea * 0;
-    int i_offset_ch1 = m_iImgArea * 1;
-    int i_offset_ch2 = m_iImgArea * 2;
-
-    int i_channel = m_nvInputDims.d[1];
-    int i_height = m_nvInputDims.d[2];
-    int i_width = m_nvInputDims.d[3];
-    
-    for (int i = 0; i < i_height; i++) {
-        for (int j = 0; j < i_width; j++) {
-            i_idx = i * i_width * i_channel + j * i_channel;
-            m_pInputMemory[0][i_offset_ch2++] = mat_tar.data[pixel_idx + 0] / 255.0f;
-            m_pInputMemory[0][i_offset_ch1++] = mat_tar.data[pixel_idx + 1] / 255.0f;
-            m_pInputMemory[0][i_offset_ch0++] = mat_tar.data[pixel_idx + 2] / 255.0f;
-        }
-    }
+    LetterboxCpu(m_matInputImage, m_pInputMemory[0], i_target_h, i_target_w);
 
     CUDA_CHECK(cudaMemcpyAsync(m_pInputMemory[1], m_pInputMemory[0], m_iInputSize, cudaMemcpyKind::cudaMemcpyHostToDevice, m_cuStream));
 
@@ -221,6 +182,11 @@ bool YoloDetector::PostprocessCpu() {
 
     m_cTimer.StopCpu<Timer::ms>("postprocess(CPU)");
 
+    // 结果目录不存在时先创建，避免 imwrite 静默失败
+    std::string str_out_dir = m_strOutputPath.substr(0, m_strOutputPath.find_last_of("/"));
+    if (!IsFileExist(str_out_dir) && !CreateDir(str_out_dir)) {
+        LOGE("Failed to create result directory: %s", str_out_dir.c_str());
+    }
     cv::imwrite(m_strOutputPath, m_matInputImage);
     LOG("\tsave image to %s\n", m_strOutputPath.c_str());
 
@@ -228,13 +194,20 @@ bool YoloDetector::PostprocessCpu() {
 }
 
 
-bool YoloDetector::PostprocessGpu() {
-    return PostprocessCpu();
+std::vector<Bbox> YoloDetector::GetFinalBboxes() const {
+    // m_vecBbox 中保留的是 NMS 前的全部候选框，被 NMS 抑制的框带有删除标记
+    std::vector<Bbox> vec_final;
+    for (const auto& c_box : m_vecBbox) {
+        if (!c_box.m_bFlgRemove) {
+            vec_final.emplace_back(c_box);
+        }
+    }
+    return vec_final;
 }
 
-
 std::unique_ptr<YoloDetector> MakeDetector(
-    std::string strOnnxPath, Level cLevel, Params cParams)
+    const std::string& strOnnxPath, Level cLevel, const Params& cParams,
+    std::shared_ptr<InferBackend> pBackend)
 {
-    return std::make_unique<YoloDetector>(strOnnxPath, cLevel, cParams);
+    return std::make_unique<YoloDetector>(strOnnxPath, cLevel, cParams, std::move(pBackend));
 }

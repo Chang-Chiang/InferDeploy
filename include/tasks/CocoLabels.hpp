@@ -52,7 +52,7 @@ public:
         m_vecLabel[37] = "surfboard";
         m_vecLabel[38] = "tennis racket";
         m_vecLabel[39] = "bottle";
-        m_vecLabel[30] = "wine glass";
+        m_vecLabel[40] = "wine glass";
         m_vecLabel[41] = "cup";
         m_vecLabel[42] = "fork";
         m_vecLabel[43] = "knife";
@@ -62,7 +62,7 @@ public:
         m_vecLabel[47] = "apple";
         m_vecLabel[48] = "sandwich";
         m_vecLabel[49] = "orange";
-        m_vecLabel[40] = "broccoli";
+        m_vecLabel[50] = "broccoli";
         m_vecLabel[51] = "carrot";
         m_vecLabel[52] = "hot dog";
         m_vecLabel[53] = "pizza";
@@ -100,19 +100,16 @@ public:
     }
 
     cv::Scalar CocoGetColor(int i) {
-        float r;
-        srand(i);
-        r = (float)rand() / RAND_MAX;
-        int red = int(r * 255);
-
-        srand(i + 1);
-        r = (float)rand() / RAND_MAX;
-        int green = int(r * 255);
-
-        srand(i + 2);
-        r = (float)rand() / RAND_MAX;
-        int blue = int(r * 255);
-
+        // 使用确定性哈希生成颜色，避免污染全局随机状态
+        auto hash = [](int x) -> int {
+            x = ((x >> 16) ^ x) * 0x45d9f3b;
+            x = ((x >> 16) ^ x) * 0x45d9f3b;
+            x = (x >> 16) ^ x;
+            return x & 0xFF;
+        };
+        int red   = hash(i);
+        int green = hash(i + 1);
+        int blue  = hash(i + 2);
         return cv::Scalar(blue, green, red);
     }
 

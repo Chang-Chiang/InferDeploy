@@ -92,6 +92,6 @@ void Logger::__log_info(Level eLevel, const char* pFormat, ...) {
     // 出现 ERROR，输出日志并退出程序
     if (eLevel <= Level::ERROR) {
         fflush(stdout);
-        exit(0);
+        exit(EXIT_FAILURE);
     }
 }

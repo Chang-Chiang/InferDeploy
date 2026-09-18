@@ -5,15 +5,10 @@
 
 #include <memory>
 
-void YoloClassifier::Setup(void const* pData, size_t iSize) {
-    m_pRuntime     = TrtUniquePtr<nvinfer1::IRuntime>(nvinfer1::createInferRuntime(m_cLogger));
-    m_pEngine      = TrtUniquePtr<nvinfer1::ICudaEngine>(m_pRuntime->deserializeCudaEngine(pData, iSize));
-    m_pContext     = TrtUniquePtr<nvinfer1::IExecutionContext>(m_pEngine->createExecutionContext());
-    m_nvInputDims  = m_pContext->getBindingDimensions(0);
-    m_nvOutputDims = m_pContext->getBindingDimensions(1);
+void YoloClassifier::SetupIoBuffers() {
+    m_nvInputDims  = m_vecInputs[0].dims;
+    m_nvOutputDims = m_vecOutputs[0].dims;
 
-    CUDA_CHECK(cudaStreamCreate(&m_cuStream));
-    
     m_iInputSize  = m_cParams.m_cImgInfo.m_iHeight * m_cParams.m_cImgInfo.m_iWidth * m_cParams.m_cImgInfo.m_iChannel * sizeof(float);
     m_iOutputSize = m_cParams.m_iNumCls * sizeof(float);
     m_iImgArea    = m_cParams.m_cImgInfo.m_iHeight * m_cParams.m_cImgInfo.m_iWidth;
@@ -22,9 +17,6 @@ void YoloClassifier::Setup(void const* pData, size_t iSize) {
     CUDA_CHECK(cudaMallocHost((void**)&m_pOutputMemory[0], m_iOutputSize));
     CUDA_CHECK(cudaMalloc((void**)&m_pInputMemory[1], m_iInputSize));
     CUDA_CHECK(cudaMalloc((void**)&m_pOutputMemory[1], m_iOutputSize));
-
-    m_pBindings[0] = m_pInputMemory[1];
-    m_pBindings[1] = m_pOutputMemory[1];
 }
 
 void YoloClassifier::ResetTask() {}
@@ -102,6 +94,10 @@ bool YoloClassifier::PostprocessCpu() {
     int i_pos = std::max_element(m_pOutputMemory[0], m_pOutputMemory[0] + m_cParams.m_iNumCls) - m_pOutputMemory[0];
     float f_confidence = m_pOutputMemory[0][i_pos] * 100;
 
+    // 保存分类结果，供外部（如量化精度评估工具）读取
+    m_iTop1Index  = i_pos;
+    m_fConfidence = m_pOutputMemory[0][i_pos];
+
     m_cTimer.StopCpu<Timer::ms>("postprocess(CPU)");
 
     LOG("Result:     %s", c_labels.ImagenetLabelString(i_pos).c_str());   
@@ -111,10 +107,8 @@ bool YoloClassifier::PostprocessCpu() {
 }
 
 
-bool YoloClassifier::PostprocessGpu() {
-    return PostprocessCpu();
+std::unique_ptr<YoloClassifier> MakeClassifier(const std::string& strModelPath, Level cLevel, const Params& cParams,
+                                               std::shared_ptr<InferBackend> pBackend) {
+    return std::make_unique<YoloClassifier>(strModelPath, cLevel, cParams, std::move(pBackend));
 }
 
-std::unique_ptr<YoloClassifier> MakeClassifier(std::string strModelPath, Level cLevel, Params cParams) {
-    return std::make_unique<YoloClassifier>(strModelPath, cLevel, cParams);
-}

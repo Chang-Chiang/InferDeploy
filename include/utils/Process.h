@@ -94,6 +94,12 @@ void ResizeGpu(
     const int& iTarH, const int& iTarW, 
     InterpolationTactics eInterpolation);
 
+/// @brief 单通道灰度图 GPU 双线性缩放 + /255 归一化（医学图像分割预处理）
+void ResizeGrayGpu(
+    cv::Mat &matSrc, float* pTar, 
+    const int& iTarH, const int& iTarW, 
+    InterpolationTactics eInterpolation);
+
 void ResizeBilinearGpu(
     float* pTar, uint8_t* pSrc, 
     int iTarW, int iTarH, 
@@ -108,3 +114,11 @@ void ResizeBilinearGpu(
     InterpolationTactics eInterpolation);
 
 HOST_DEVICE void AffineTransformation(float* trans_matrix, int src_x, int src_y, float* tar_x, float* tar_y);
+
+/// @brief CPU letterbox 预处理：等比缩放 + 黑边填充 + NHWC→NCHW + /255 归一化
+/// @param matSrc 输入图像 (BGR, uint8)
+/// @param pDst 输出缓冲区 (float, NCHW, 已归一化)
+/// @param iTarH 目标高度
+/// @param iTarW 目标宽度
+/// @return 填充后的完整图像 (用于调试/可视化)
+cv::Mat LetterboxCpu(const cv::Mat& matSrc, float* pDst, int iTarH, int iTarW);

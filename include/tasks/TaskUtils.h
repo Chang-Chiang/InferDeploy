@@ -50,6 +50,10 @@ struct Bbox {
         
         m_cvRect.x = m_cvRect.x < 0 ? 0 : m_cvRect.x;
         m_cvRect.y = m_cvRect.y < 0 ? 0 : m_cvRect.y;
+
+        // 防御性保护：量化模型可能输出坐标倒置/异常的框，保证 ROI 有效
+        if (m_cvRect.width  < 1) m_cvRect.width  = 1;
+        if (m_cvRect.height < 1) m_cvRect.height = 1;
     }
 };
 

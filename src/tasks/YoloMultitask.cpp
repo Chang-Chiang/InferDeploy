@@ -6,16 +6,20 @@
 #include <memory>
 
 
-void YoloMultitask::Setup(void const* pData, size_t iSize) {
-    m_pRuntime      = TrtUniquePtr<nvinfer1::IRuntime>(nvinfer1::createInferRuntime(m_cLogger));
-    m_pEngine       = TrtUniquePtr<nvinfer1::ICudaEngine>(m_pRuntime->deserializeCudaEngine(pData, iSize));
-    m_pContext      = TrtUniquePtr<nvinfer1::IExecutionContext>(m_pEngine->createExecutionContext());
-    m_nvInputDims   = m_pContext->getBindingDimensions(0);
-    m_nvSegmentDims = m_pContext->getBindingDimensions(1);
-    m_nvDetectDims  = m_pContext->getBindingDimensions(2);
+void YoloMultitask::SetupIoBuffers() {
+    // 多任务模型有两个输出：检测头 (3 维: 1*8400*116) 与分割 proto 头 (4 维: 1*32*160*160)，
+    // 按维度区分，不依赖引擎内 tensor 顺序
+    for (const auto& c_meta : m_vecOutputs) {
+        if (c_meta.dims.nbDims == 4) {
+            m_strSegmentName = c_meta.strName;
+            m_nvSegmentDims  = c_meta.dims;
+        }
+        else {
+            m_strDetectName = c_meta.strName;
+            m_nvDetectDims  = c_meta.dims;
+        }
+    }
 
-    CUDA_CHECK(cudaStreamCreate(&m_cuStream));
-    
     m_iInputSize   = m_cParams.m_cImgInfo.m_iHeight * m_cParams.m_cImgInfo.m_iWidth * m_cParams.m_cImgInfo.m_iChannel * sizeof(float);
     m_iImgArea     = m_cParams.m_cImgInfo.m_iHeight * m_cParams.m_cImgInfo.m_iWidth;
     m_iDetectSize  = m_nvDetectDims.d[1] * m_nvDetectDims.d[2] * sizeof(float);
@@ -27,10 +31,6 @@ void YoloMultitask::Setup(void const* pData, size_t iSize) {
     CUDA_CHECK(cudaMalloc(&m_pInputMemory[1], m_iInputSize));
     CUDA_CHECK(cudaMalloc(&m_pDetectMemory[1], m_iDetectSize));
     CUDA_CHECK(cudaMalloc(&m_pSegmentMemory[1], m_iSegmentSize));
-
-    m_pBindings[0] = m_pInputMemory[1];
-    m_pBindings[1] = m_pSegmentMemory[1];
-    m_pBindings[2] = m_pDetectMemory[1];
 }
 
 void YoloMultitask::ResetTask(){
@@ -46,47 +46,20 @@ bool YoloMultitask::PreprocessCpu() {
 
     m_matInputImage = cv::imread(m_strImagePath);
     if (m_matInputImage.data == nullptr) {
-        LOGE("ERROR: Image file not founded! Program terminated"); 
+        LOGE("ERROR: Image file not founded! Program terminated");
         return false;
     }
 
     m_cTimer.StartCpu();
 
-    int   i_input_w  = m_matInputImage.cols;
-    int   i_input_h  = m_matInputImage.rows;
-    int   i_target_w = m_cParams.m_cImgInfo.m_iWidth;
-    int   i_target_h = m_cParams.m_cImgInfo.m_iHeight;
-    float f_scale    = std::min(float(i_target_w)/i_input_w, float(i_target_h)/i_input_h);
-    int   i_new_w    = int(i_input_w * f_scale);
-    int   i_new_h    = int(i_input_h * f_scale);
+    int i_input_h = m_matInputImage.rows;
+    int i_input_w = m_matInputImage.cols;
+    int i_target_w = m_cParams.m_cImgInfo.m_iWidth;
+    int i_target_h = m_cParams.m_cImgInfo.m_iHeight;
 
     WarpAffineInit(i_input_h, i_input_w, i_target_h, i_target_w);
-    
-    cv::Mat mat_tar(i_target_w, i_target_h, CV_8UC3, cv::Scalar(0, 0, 0));
-    cv::Mat mat_resized_img;
-    cv::resize(m_matInputImage, mat_resized_img, cv::Size(i_new_w, i_new_h));
 
-    int x, y;
-    x = (i_new_w < i_target_w) ? (i_target_w - i_new_w) / 2 : 0;
-    y = (i_new_h < i_target_h) ? (i_target_h - i_new_h) / 2 : 0;
-
-    cv::Rect cv_roi(x, y, i_new_w, i_new_h);
-
-    cv::Mat mat_roi_tar = mat_tar(cv_roi);
-    mat_resized_img.copyTo(mat_roi_tar);
-
-    int i_idx;
-    int i_offset_ch0 = m_iImgArea * 0;
-    int i_offset_ch1 = m_iImgArea * 1;
-    int i_offset_ch2 = m_iImgArea * 2;
-    for (int i = 0; i < m_nvInputDims.d[2]; i++) {
-        for (int j = 0; j < m_nvInputDims.d[3]; j++) {
-            i_idx = i * m_nvInputDims.d[3] * m_nvInputDims.d[1] + j * m_nvInputDims.d[1];
-            m_pInputMemory[0][i_offset_ch2++] = mat_roi_tar.data[i_idx + 0] / 255.0f;
-            m_pInputMemory[0][i_offset_ch1++] = mat_roi_tar.data[i_idx + 1] / 255.0f;
-            m_pInputMemory[0][i_offset_ch0++] = mat_roi_tar.data[i_idx + 2] / 255.0f;
-        }
-    }
+    LetterboxCpu(m_matInputImage, m_pInputMemory[0], i_target_h, i_target_w);
 
     CUDA_CHECK(cudaMemcpyAsync(m_pInputMemory[1], m_pInputMemory[0], m_iInputSize, cudaMemcpyKind::cudaMemcpyHostToDevice, m_cuStream));
 
@@ -265,6 +238,11 @@ bool YoloMultitask::PostprocessCpu() {
 
     m_cTimer.StopCpu<Timer::ms>("postprocess(CPU)");
 
+    // 结果目录不存在时先创建，避免 imwrite 静默失败
+    std::string str_out_dir = m_strOutputPath.substr(0, m_strOutputPath.find_last_of("/"));
+    if (!IsFileExist(str_out_dir) && !CreateDir(str_out_dir)) {
+        LOGE("Failed to create result directory: %s", str_out_dir.c_str());
+    }
     cv::imwrite(m_strOutputPath, m_matInputImage);
     LOG("\tsave image to %s", m_strOutputPath.c_str());
 
@@ -275,12 +253,28 @@ bool YoloMultitask::PostprocessCpu() {
 }
 
 
-bool YoloMultitask::PostprocessGpu() {
-    return PostprocessCpu();
+std::vector<Bbox> YoloMultitask::GetFinalBboxes() const {
+    return m_vecBbox;
+}
+
+float* YoloMultitask::GetOutputHostPtr(int i) {
+    return (m_vecOutputs[i].strName == m_strDetectName) ? m_pDetectMemory[0] : m_pSegmentMemory[0];
+}
+
+float* YoloMultitask::GetOutputDevicePtr(int i) {
+    return (m_vecOutputs[i].strName == m_strDetectName) ? m_pDetectMemory[1] : m_pSegmentMemory[1];
+}
+
+void YoloMultitask::ReleaseExtraBuffers() {
+    if (m_pDetectMemory[0])  { cudaFreeHost(m_pDetectMemory[0]);  m_pDetectMemory[0] = nullptr; }
+    if (m_pDetectMemory[1])  { cudaFree(m_pDetectMemory[1]);      m_pDetectMemory[1] = nullptr; }
+    if (m_pSegmentMemory[0]) { cudaFreeHost(m_pSegmentMemory[0]); m_pSegmentMemory[0] = nullptr; }
+    if (m_pSegmentMemory[1]) { cudaFree(m_pSegmentMemory[1]);     m_pSegmentMemory[1] = nullptr; }
 }
 
 std::unique_ptr<YoloMultitask> MakeMultitask(
-    std::string strOnnxPath, Level cLevel, Params cParams)
+    const std::string& strOnnxPath, Level cLevel, const Params& cParams,
+    std::shared_ptr<InferBackend> pBackend)
 {
-    return std::make_unique<YoloMultitask>(strOnnxPath, cLevel, cParams);
+    return std::make_unique<YoloMultitask>(strOnnxPath, cLevel, cParams, std::move(pBackend));
 }

@@ -1,6 +1,6 @@
 #include "include/utils/FileUtil.h"
 
-#include <experimental/filesystem>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -8,18 +8,12 @@
 
 #include "include/utils/Logger.h"
 
-bool IsFileExist(const std::string strFileName) {
-    if (!std::experimental::filesystem::exists(
-            std::experimental::filesystem::path(strFileName))) {
-        return false;
-    }
-    else {
-        return true;
-    }
+bool IsFileExist(const std::string& strFileName) {
+    return std::filesystem::exists(std::filesystem::path(strFileName));
 }
 
-bool CreateDir(const std::string strDir) { 
-    return std::experimental::filesystem::create_directory(strDir);
+bool CreateDir(const std::string& strDir) {
+    return std::filesystem::create_directories(strDir);
 }
 
 bool IsFileReadSuccess(const std::string &strPath, std::vector<unsigned char> &vecData, size_t &iSize){
