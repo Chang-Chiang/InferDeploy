@@ -7,7 +7,9 @@ BUILD_PATH    :=  build
 SAMPLE_PATH   :=  samples
 SRC_PATH      :=  src
 INC_PATH      :=  include
-CUDA_DIR      :=  /usr
+# CUDA 前缀与库目录由 config/Makefile.config 给定；这里只作缺省回退（?= 不覆盖 config）
+CUDA_DIR      ?=  /usr/local/cuda
+CUDA_LIB_DIR  ?=  $(CUDA_DIR)/lib64
 
 # Include source files from both samples and src directories
 EVAL_MAIN     :=  $(SAMPLE_PATH)/quant_eval.cpp
@@ -41,6 +43,23 @@ APP_DEPS      +=  $(wildcard $(INC_PATH)/**/*.h)
 
 
 CUCC          :=  $(CUDA_DIR)/bin/nvcc
+CUOBJDUMP     :=  $(CUDA_DIR)/bin/cuobjdump
+
+# 自研 .cu 必须嵌入与本机 GPU 匹配的原生 SASS：只出 PTX 时，若 CUDA 工具链比驱动新，
+# 驱动会拒绝 JIT（报 "the provided PTX was compiled with an unsupported toolchain"），
+# 且失败是静默的（cudaMalloc/Memcpy/Synchronize 全返回 no error，只有 cudaGetLastError 有内容），
+# 表现为核函数不执行、输出缓冲保持 memset 值，因此在构建期直接拦住（与 post3d/Makefile 的 check_sass 同一约定，
+# 两边都支持 SKIP_SASS_CHECK=1 绕过，用于纯 PTX 对照实验）。
+CUDA_SASS_ARCH :=  $(shell echo "$(ARCH)" | grep -oE "sm_[0-9]+" | head -1)
+define check_sass
+	@if [ -n "$(SKIP_SASS_CHECK)" ]; then exit 0; fi; \
+	if [ -z "$(CUDA_SASS_ARCH)" ]; then \
+		echo "ERROR: 构建目标未带任何 sm_XX 原生 SASS（纯 PTX 目标），核函数会静默不执行；对照实验请用 SKIP_SASS_CHECK=1"; exit 1; \
+	fi; \
+	if ! $(CUOBJDUMP) --list-elf $(1) 2>/dev/null | grep -q "$(CUDA_SASS_ARCH)"; then \
+		echo "ERROR: $(1) 未嵌入 $(CUDA_SASS_ARCH) 原生 SASS，核函数会静默不执行（检查 config/Makefile.config 的 ARCH）"; exit 1; \
+	fi
+endef
 CXXFLAGS      :=  -std=c++17 -pthread -fPIC
 CUDAFLAGS     :=  --shared -Xcompiler -fPIC 
 
@@ -51,9 +70,9 @@ INCS          :=  -I $(CUDA_DIR)/include \
                   -I $(INC_PATH) \
                   -I .
 
-LIBS          :=  -L "$(CUDA_DIR)/lib/x86_64-linux-gnu" \
+LIBS          :=  -L "$(CUDA_LIB_DIR)" \
                   -L "$(TENSORRT_INSTALL_DIR)/lib/x86_64-linux-gnu" \
-                  -Wl,-rpath "$(CUDA_DIR)/lib/x86_64-linux-gnu" \
+                  -Wl,-rpath "$(CUDA_LIB_DIR)" \
                   -Wl,-rpath "$(TENSORRT_INSTALL_DIR)/lib/x86_64-linux-gnu" \
                   -Wl,--no-as-needed \
 				  -lcudart -lcublas \
@@ -151,7 +170,8 @@ $(BUILD_PATH)/%.cpp.o: $(SRC_PATH)/utils/%.cpp
 
 $(BUILD_PATH)/%.cu.o: $(SRC_PATH)/utils/%.cu
 	@mkdir -p $(dir $@)
-	@$(CUCC) $(CUDAFLAGS) $(INCS) -c $< -o $@
+	@$(CUCC) $(ARCH) $(CUDAFLAGS) $(INCS) -c $< -o $@
+	@$(call check_sass,$@)
 
 show: 
 	@echo $(BUILD_PATH)
@@ -184,10 +204,11 @@ $(BUILD_PATH)/%.cpp.mk: %.cpp
 $(BUILD_PATH)/%.cu.o: %.cu
 	@echo Compile CUDA $@
 	@mkdir -p $(BUILD_PATH)
-	@$(CUCC) -o $@ -c $< $(CUDAFLAGS) $(INCS)
+	@$(CUCC) $(ARCH) -o $@ -c $< $(CUDAFLAGS) $(INCS)
+	@$(call check_sass,$@)
 $(BUILD_PATH)/%.cu.mk: %.cu
 	@echo Compile Dependence CUDA $@
 	@mkdir -p $(BUILD_PATH)
-	@$(CUCC) -M $< -MF $@ -MT $(@:.cu.mk=.cu.o) $(CUDAFLAGS)
+	@$(CUCC) -M $< -MF $@ -MT $(@:.cu.mk=.cu.o) $(ARCH) $(CUDAFLAGS)
 
 .PHONY: all update quant-eval volume-seg liver3d show clean 
