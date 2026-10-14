@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Integration test for the CUDA 3D liver-mask post-processing pipeline.
+"""CUDA 三维肝脏掩码后处理流水线的集成测试。
 
-Runs bin/liver3d, parses its report, and validates the produced mask with numpy:
-  * every pipeline step is present and has a non-negative timing
-  * CCL filtering reduced the number of components (isolated FPs removed)
-  * post-processing did not degrade accuracy (final Dice >= reconstructed Dice)
-  * output file exists, is correct size, strictly binary, and its voxel count /
-    volume / Dice match the numbers reported by the binary
+跑一次 bin/liver3d，解析它输出的报告，并用 numpy 校验生成的掩码：
+  * 流水线的每个步骤都出现在报告里，且耗时非负
+  * CCL 过滤后连通域数量下降（孤立假阳性被剔除）
+  * 后处理没有让精度变差（最终 Dice >= 重建时的 Dice）
+  * 输出文件存在、尺寸正确、严格二值，且其体素数 / 体积 / Dice
+    与可执行文件上报的数字一致
 """
 import os
 import re
@@ -57,7 +57,7 @@ def main():
     log = out.stdout
     print(log)
 
-    # ---- parse report ------------------------------------------------------
+    # ---- 解析报告 --------------------------------------------------------
     steps = dict(re.findall(r"^\s+(\d[ab]?\.\s+[A-Za-z0-9 ()+_.\-]+?)\s{2,}([\d.]+) ms$",
                             log, flags=re.MULTILINE))
     total_m = re.search(r"TOTAL pipeline\s+([\d.]+) ms", log)
@@ -84,7 +84,7 @@ def main():
               f"CCL filtering reduced components ({found} -> {kept})")
         check(kept >= 1 and largest > 0, "at least one component kept")
 
-    # ---- validate output mask with numpy -----------------------------------
+    # ---- 用 numpy 校验输出的掩码 ----------------------------------------
     with open(os.path.join(DATA, "meta.txt")) as f:
         W, H, D, dx, dy, dz = f.read().split()
         W, H, D = int(W), int(H), int(D)
@@ -114,7 +114,7 @@ def main():
         check(float(dice_m.group(3)) >= -1e-9,
               f"post-processing did not degrade Dice (delta {dice_m.group(3)})")
 
-    # previews
+    # 预览图
     prev = [f for f in os.listdir(
         os.path.join(DATA, "out")) if f.endswith(".pgm")]
     check(len(prev) >= 1, f"PGM previews written ({len(prev)})")

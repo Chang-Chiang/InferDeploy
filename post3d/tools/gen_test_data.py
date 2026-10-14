@@ -1,30 +1,30 @@
 #!/usr/bin/env python3
-"""Generate synthetic UNet-style liver segmentation test data (numpy only).
+"""生成合成的 UNet 风格肝脏分割测试数据（仅依赖 numpy）。
 
-Produces a clean ground-truth liver mask and a *predicted* mask that mimics the
-typical imperfections of a slice-by-slice 2D UNet:
+产生一份干净的肝脏金标准掩码，以及一份*预测*掩码，后者刻意模拟逐切面
+2D UNet 推理的典型缺陷：
 
-  * wobbly / jittered boundaries (per-slice inference noise)
-  * inter-layer discontinuities (a few shifted or dropped slices -> thin gaps)
-  * interior holes (vessels mis-segmented as background)
-  * edge burrs (thin spurious protrusions on the surface)
-  * isolated false positives (small blobs present in only 1-2 slices)
+  * 抖动 / 不稳定的边界（逐切面推理噪声）
+  * 层间不连续（若干切面被平移或丢弃 -> 形成薄缝隙）
+  * 内部孔洞（血管被误判为背景）
+  * 边缘毛刺（表面上细弱的伪突出）
+  * 孤立假阳性（只出现在 1-2 个切面的小连通域）
 
-Outputs (under --outdir, default ./data):
-  slices/slice_%04d.u8   per-slice predicted masks (pipeline input), W*H bytes
+输出（位于 --outdir，默认 ./data）：
+  slices/slice_%04d.u8   逐切面预测掩码（流水线输入），每个 W*H 字节
   meta.txt               "W H D dx dy dz"
-  liver_pred_stack.u8    combined predicted stack (W*H*D bytes)
-  liver_gt.u8            clean ground-truth stack (for Dice reporting)
-  preview/*.pgm          a few axial PGM previews of pred vs gt
+  liver_pred_stack.u8    合并后的预测栈（W*H*D 字节）
+  liver_gt.u8            干净的金标准栈（用于 Dice 上报）
+  preview/*.pgm          若干轴位 PGM 预览图（pred 与 gt）
 """
 import argparse
 import os
 import numpy as np
 
 
-# ----------------------------- small helpers --------------------------------
+# ----------------------------- 小工具函数 ----------------------------------
 def gaussian_blur3(vol, sigma):
-    """Separable 3D Gaussian blur with edge-replicate padding (no scipy)."""
+    """可分离的三维高斯模糊，边界用复制填充（不依赖 scipy）。"""
     r = max(1, int(np.ceil(3 * sigma)))
     ax = np.arange(-r, r + 1)
     k = np.exp(-(ax ** 2) / (2 * sigma * sigma))
@@ -84,12 +84,12 @@ def save_pgm(path, arr2d):
         f.write((arr2d.astype(np.uint8) * 255).tobytes())
 
 
-# ------------------------------- liver model --------------------------------
+# ------------------------------- 肝脏模型 -----------------------------------
 def build_liver_gt(W, H, D, rng):
-    """Two-ellipsoid liver-like blob (right lobe + left lobe) with a notch."""
+    """由两个椭球拼出的肝脏状团块（右叶 + 左叶），并带一个心切迹。"""
     z, y, x = np.mgrid[0:D, 0:H, 0:W].astype(np.float32)
 
-    # right lobe (large), left lobe (smaller, offset)
+    # 右叶（较大）、左叶（较小，且有偏移）
     crx, cry, crz = 0.42 * W, 0.56 * H, 0.50 * D
     rr = ((x - crx) / (0.25 * W)) ** 2 + ((y - cry) /
                                           (0.22 * H)) ** 2 + ((z - crz) / (0.33 * D)) ** 2
@@ -100,7 +100,7 @@ def build_liver_gt(W, H, D, rng):
 
     v = np.minimum(rr, rl)
 
-    # cardiac notch: carve a concave region so the shape is not a perfect blob
+    # 心切迹：挖出一个凹区，使形状不只是一个完美团块
     nx, ny, nz = 0.55 * W, 0.30 * H, 0.30 * D
     notch = ((x - nx) / (0.14 * W)) ** 2 + ((y - ny) /
                                             (0.12 * H)) ** 2 + ((z - nz) / (0.20 * D)) ** 2
@@ -113,24 +113,24 @@ def build_liver_gt(W, H, D, rng):
 def make_prediction(gt, v, W, H, D, rng):
     pred = gt.copy()
 
-    # 1) boundary jitter: locally perturb the implicit surface threshold
+    # 1) 边界抖动：对隐式曲面的阈值做局部扰动
     noise = gaussian_blur3(rng.standard_normal(
         (D, H, W)).astype(np.float32), sigma=2.5)
     noise /= (np.abs(noise).max() + 1e-6)
     pred = (v <= 1.0 + 0.22 * noise).astype(np.uint8)
 
-    # 2) inter-layer discontinuity: shift a few slices, drop a thin region
+    # 2) 层间不连续：平移若干切面，并抹掉一小块区域
     shift_slices = rng.choice(D, size=max(3, D // 16), replace=False)
     for zs in shift_slices:
         dy = int(rng.integers(-2, 3))
         dx = int(rng.integers(-2, 3))
         pred[zs] = np.roll(pred[zs], (dy, dx), axis=(0, 1))
-    # a couple of dropout slices -> gaps that morphological closing must bridge
+    # 再丢掉几个切面 -> 形成必须由形态学闭运算弥合的缝隙
     for zs in rng.choice(D, size=3, replace=False):
         cy, cx = int(0.5 * H), int(0.45 * W)
         pred[zs, cy - 10:cy + 10, cx - 14:cx + 14] = 0
 
-    # 3) interior holes (vessels)
+    # 3) 内部孔洞（血管）
     interior = erode6(erode6(gt.astype(bool)))
     iz, iy, ix = np.nonzero(interior)
     if len(iz):
@@ -138,7 +138,7 @@ def make_prediction(gt, v, W, H, D, rng):
             set_ball(pred, int(iz[idx]), int(iy[idx]), int(
                 ix[idx]), int(rng.integers(1, 5)), 0)
 
-    # 4) edge burrs: thin protrusions on the surface
+    # 4) 边缘毛刺：表面上的细弱突出
     surface = gt.astype(bool) & ~erode6(gt.astype(bool))
     sz, sy, sx = np.nonzero(surface)
     if len(sz):
@@ -150,7 +150,7 @@ def make_prediction(gt, v, W, H, D, rng):
                 if 0 <= nz_ < D and 0 <= ny_ < H and 0 <= nx_ < W:
                     pred[nz_, ny_, nx_] = 1
 
-    # 5) isolated false positives (small blobs, some only in 1 slice)
+    # 5) 孤立假阳性（小块，有些只出现在单个切面）
     placed = 0
     tries = 0
     while placed < 90 and tries < 8000:
@@ -158,21 +158,21 @@ def make_prediction(gt, v, W, H, D, rng):
         cz = int(rng.integers(4, D - 4))
         cy = int(rng.integers(6, H - 6))
         cx = int(rng.integers(6, W - 6))
-        # require a clear neighbourhood so the FP is genuinely isolated
+        # 要求邻域干净，这样这个假阳性才是真正孤立的
         if pred[max(0, cz - 5):cz + 6, max(0, cy - 5):cy + 6, max(0, cx - 5):cx + 6].any():
             continue
         if rng.random() < 0.5:
             set_disc(pred, cz, cy, cx, int(
-                rng.integers(1, 3)), 1)  # single-slice FP
+                rng.integers(1, 3)), 1)  # 单切面假阳性
         else:
             set_ball(pred, cz, cy, cx, int(
-                rng.integers(1, 3)), 1)  # few-slice FP
+                rng.integers(1, 3)), 1)  # 跨几个切面的假阳性
         placed += 1
 
     return pred
 
 
-# ---------------------------------- main ------------------------------------
+# ---------------------------------- 主流程 ----------------------------------
 def main():
     ap = argparse.ArgumentParser(
         description="Synthetic UNet liver-mask test data generator")
@@ -201,12 +201,12 @@ def main():
     os.makedirs(prev_dir, exist_ok=True)
     os.makedirs(os.path.join(out, "out"), exist_ok=True)
 
-    # per-slice masks (the layer-by-layer pipeline input)
+    # 逐切面掩码（逐层推理流水线的输入）
     for z in range(D):
         with open(os.path.join(slices_dir, f"slice_{z:04d}.u8"), "wb") as f:
             f.write(pred[z].astype(np.uint8).tobytes())
 
-    # combined stacks + meta
+    # 合并后的数据栈 + 元数据
     with open(os.path.join(out, "liver_pred_stack.u8"), "wb") as f:
         f.write(pred.astype(np.uint8).tobytes())
     with open(os.path.join(out, "liver_gt.u8"), "wb") as f:
@@ -214,7 +214,7 @@ def main():
     with open(os.path.join(out, "meta.txt"), "w") as f:
         f.write(f"{W} {H} {D} {args.dx} {args.dy} {args.dz}\n")
 
-    # previews (middle + two off-center slices), pred vs gt
+    # 预览图（中间切面 + 两个偏心切面），pred 与 gt 各一份
     for z in (D // 4, D // 2, (3 * D) // 4):
         save_pgm(os.path.join(prev_dir, f"pred_z{z:03d}.pgm"), pred[z])
         save_pgm(os.path.join(prev_dir, f"gt_z{z:03d}.pgm"), gt[z])

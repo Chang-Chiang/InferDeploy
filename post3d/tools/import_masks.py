@@ -1,19 +1,18 @@
 #!/usr/bin/env python3
-"""Import real segmentation masks (e.g. UNet liver predictions) into the
-pipeline's input format.
+"""把真实的分割掩码（例如 UNet 的肝脏预测）导入流水线需要的输入格式。
 
-Accepts a directory of 2D slice masks as PNG/JPG/TIFF (needs Pillow), PGM/PBM
-(PNM, decoded with numpy only), or headerless RAW bytes, and converts them into:
+接受一个存放 2D 切面掩码的目录，格式可以是 PNG/JPG/TIFF（需要 Pillow）、
+PGM/PBM（PNM，仅用 numpy 解码），或无头的 RAW 字节文件，然后转成：
 
-    <out>/slices/slice_%04d.u8   one W*H byte file per slice (0/1)
+    <out>/slices/slice_%04d.u8   每个切面一个 W*H 字节的 0/1 文件
     <out>/meta.txt               "W H D dx dy dz"
 
-Example (UNet predictions saved as 0/255 PNGs, 512x512, 1mm in-plane, 2mm slices):
+例子（UNet 预测存成了 0/255 的 PNG，512x512，面内 1mm，层厚 2mm）：
     python3 tools/import_masks.py --indir unet_pred_png --out data \
         --dx 0.7 --dy 0.7 --dz 2.0 --ext '*.png' --threshold 127
 
-Public liver CT datasets whose masks you can run a UNet on (or reuse):
-    3D-IRCADb-01, LiTS (Liver Tumor Segmentation Challenge).
+可以跑 UNet（或直接复用）的公开肝脏 CT 数据集：
+    3D-IRCADb-01、LiTS（Liver Tumor Segmentation Challenge）。
 """
 import argparse
 import glob
@@ -24,7 +23,7 @@ import numpy as np
 
 
 def read_pnm(path, thr, invert):
-    """Decode PGM/PBM (P1/P2/P4/P5) to a 0/1 uint8 array using numpy only."""
+    """仅用 numpy 把 PGM/PBM（P1/P2/P4/P5）解码成 0/1 的 uint8 数组。"""
     with open(path, "rb") as f:
         buf = f.read()
     n = len(buf)
@@ -35,7 +34,7 @@ def read_pnm(path, thr, invert):
         nonlocal pos
         while pos < n:
             c = buf[pos]
-            if c == 0x23:                       # '#' comment
+            if c == 0x23:                       # '#' 开头是文件内的注释行
                 while pos < n and buf[pos] != 0x0A:
                     pos += 1
                 continue
@@ -55,13 +54,13 @@ def read_pnm(path, thr, invert):
     if magic in (b"P2", b"P5"):
         maxv = int(token())
 
-    if magic == b"P5":                          # binary grayscale
+    if magic == b"P5":                          # 二进制灰度
         pos += 1
         data = np.frombuffer(buf[pos:pos + w * h],
                              dtype=np.uint8).reshape(h, w)
         arr = ((data.astype(np.uint16) * 255 // max(maxv, 1))
                > thr).astype(np.uint8)
-    elif magic == b"P4":                        # binary bitmap (1 = black)
+    elif magic == b"P4":                        # 二进制位图（1 表示黑色）
         pos += 1
         rowbytes = (w + 7) // 8
         bits = np.unpackbits(
@@ -69,7 +68,7 @@ def read_pnm(path, thr, invert):
                           dtype=np.uint8).reshape(h, rowbytes),
             axis=1)
         arr = bits[:, :w].astype(np.uint8)
-    elif magic in (b"P1", b"P2"):               # ascii bitmap / grayscale
+    elif magic in (b"P1", b"P2"):               # ASCII 位图 / 灰度图
         vals = []
         while len(vals) < w * h:
             vals.append(int(token()))
@@ -94,7 +93,7 @@ def read_image(path, thr, invert, rawW, rawH):
         a = (np.frombuffer(buf, dtype=np.uint8).reshape(
             rawH, rawW) > thr).astype(np.uint8)
         return (1 - a) if invert else a
-    # raster formats via Pillow (optional)
+    # 光栅格式交给 Pillow 处理（可选依赖）
     from PIL import Image  # noqa
     im = Image.open(path).convert("L")
     a = (np.array(im) > thr).astype(np.uint8)

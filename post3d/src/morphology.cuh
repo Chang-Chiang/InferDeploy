@@ -1,13 +1,14 @@
 #pragma once
-// 3D binary morphology with a separable box structuring element.
-//   closing (dilate then erode): bridges inter-layer gaps, fills holes
-//   opening (erode then dilate): removes burrs / thin spurious protrusions
-// The box is separable, so each 3D op is three 1D min/max passes (O(r) cost
-// per voxel instead of O(r^3)). Radii may differ per axis to elongate the
-// structuring element along Z (slice direction).
+
+/*
+ * 采用可分离 box 结构元素的三维二值形态学。
+ *   闭运算（先膨胀后腐蚀）：弥合层间空隙，填补内部孔洞
+ *   开运算（先腐蚀后膨胀）：去除毛刺 / 细弱的伪突出
+ * box 结构元素可分离，因此每次三维操作都等价于三个方向的一维 min/max
+ * 扫描（每个体素 O(r) 开销，而非 O(r^3)）。三个轴的半径可以不同，
+ * 以便沿 Z（切面堆叠方向）拉长结构元素。
+ */
 #include <cstdint>
 
-// Applies closing then opening (either can be disabled) to a 0/1 uint8 volume.
-void morphOpenClose(uint8_t* d_mask, int W, int H, int D,
-                    int rx, int ry, int rz,
-                    bool doClose, bool doOpen);
+/// @brief 对 0/1 uint8 体数据先做闭运算再做开运算（两者各自可单独关闭）
+void morphOpenClose(uint8_t* d_mask, int W, int H, int D, int rx, int ry, int rz, bool doClose, bool doOpen);

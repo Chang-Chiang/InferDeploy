@@ -1,8 +1,8 @@
-# build artifacts
+# 构建产物
 bin/
 *.o
 
-# generated test data (reproduce with tools/gen_test_data.py)
+# 生成的测试数据（可用 tools/gen_test_data.py 复现）
 data/slices/
 data/out/
 data/preview/
@@ -10,6 +10,6 @@ data/*.u8
 data/meta.txt
 data/_importtest/
 
-# python
+# Python
 __pycache__/
 *.pyc
