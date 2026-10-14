@@ -21,15 +21,23 @@
 
 | 组件 | 版本 | 说明 |
 | --- | --- | --- |
-| CUDA | 12.4+ | 含 cudart/cublas |
-| TensorRT | 10.16 | 支持 Blackwell（sm_120）；`deps/TensorRT-10.16/usr` |
+| CUDA | 12.4+（本机实测 13.4） | 含 cudart/cublas；原生编译 `sm_120` 需 **CUDA ≥ 12.8**，CUDA 13 已移除 `compute_61`/`sm_70` 等旧架构 |
+| TensorRT | 10.16 | 支持 Blackwell（sm_120）；`deps/TensorRT-10.16/usr`（cu12 构建） |
 | OpenVINO | 2026.x | 可选，`ENABLE_OPENVINO=1` 启用；`deps/OpenVINO/usr` |
 | OpenCV | 4.x | 系统安装 |
 | 编译器 | 支持 C++17 的 g++、nvcc | |
 
-> GPU 架构：`config/Makefile.config` 中 `ARCH` 需与本机 GPU 匹配；pip 版 TensorRT/OpenVINO 的
+> GPU 架构：`config/Makefile.config` 中 `ARCH` 需与本机 GPU 匹配（本机为
+> `-gencode arch=compute_120,code=sm_120`，只嵌原生 SASS）；pip 版 TensorRT/OpenVINO 的
 > `libnvinfer_builder_resource*.so` 带 executable-stack 标记时，新内核需用
 > `patchelf --clear-execstack` 清除后方可加载。
+
+> ⚠️ 工具链与驱动错配：**不要依赖「嵌 PTX + 驱动 JIT」做兼容**。CUDA 13.x 生成的 PTX
+> （ISA 9.4）比驱动 595.99（上限 CUDA 13.2）新，运行时会报
+> `the provided PTX was compiled with an unsupported toolchain`；`post3d/Makefile` 因此已从
+> `compute_90` PTX 改为 `sm_120` 原生 SASS（详见 [`post3d/README.md`](./post3d/README.md)）。
+> 另：`Makefile` 中 `CUDA_DIR := /usr` 默认 apt 版 CUDA 的路径布局，改用 `/usr/local/cuda`
+> 工具链时需同步调整 include/`lib64` 路径（cu12 运行库缺失也会使 `bin/trt-*` 无法启动）。
 
 ## 构建
 

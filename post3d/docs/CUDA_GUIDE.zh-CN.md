@@ -23,7 +23,7 @@
 | 可分离滤波 + 乒乓缓冲 | 3×1D min/max、3×1D 卷积 | `morphology.cu`、`gaussian.cu` |
 | 同步与错误检查 | `CUDA_CHECK`、`cudaDeviceSynchronize` | `common.cuh` |
 | 墙钟计时 | `Stopwatch` | `common.cuh` |
-| PTX / 架构编译 | `-gencode arch=compute_90,code=compute_90` | `Makefile` |
+| 架构编译 | `-gencode arch=compute_120,code=sm_120`（原生 SASS，不走 JIT） | `Makefile` |
 
 ---
 
@@ -388,34 +388,55 @@ for (int k = 0; k < 13; ++k) { ... }   // 13 个前向偏移，编译期展开
   `code=sm_AB` → 嵌入该架构的 **SASS**（开箱即用、无需 JIT）。
 一个二进制可嵌入多份（fatbin），运行时选最匹配的。
 
-### 10.2 PTX 前向兼容与 JIT
+### 10.2 PTX 前向兼容与 JIT（及其限制）
 驱动可把 PTX **即时编译(JIT)** 成当前 GPU 的 SASS。因此“为较老虚拟架构生成的 PTX”能在
 **更新**的 GPU 上运行——这就是前向兼容。
 
+> 但前向兼容只到**驱动自身支持的 PTX ISA** 为止：**工具链比驱动新**时（比如 CUDA 13.4 生成
+> PTX ISA 9.4，而驱动仅支持到 CUDA 13.2），JIT 会被直接拒绝，运行时报
+> `the provided PTX was compiled with an unsupported toolchain`——核函数一个也不会执行。
+
 ### 10.3 本项目的真实场景（Blackwell / sm_120）
-开发机是 **RTX 5070 Ti（Blackwell，`sm_120`，cc 12.0）**，但工具链是 **CUDA 12.4**，其
-`nvcc` **不认识 `sm_120`**（直接 `-arch=sm_120` 会报
-`Value 'sm_120' is not defined`）。解决办法：编译成 **`compute_90` 的 PTX**，交给更新的驱动
-（本机 595.x，支持 CUDA 13.x）在运行时 JIT 到 `sm_120`：
+> 本节是简版。PTX/SASS 逐行解读、JIT 失败为何“静默”、`cuobjdump`/`nvdisasm` 排查手法，
+> 见 [`PTX_JIT_SASS.zh-CN.md`](PTX_JIT_SASS.zh-CN.md)（配套可运行样例 [`../reference/ptx_jit_demo.cu`](../reference/ptx_jit_demo.cu)，`make ptxdemo`）。
+
+开发机是 **RTX 5070 Ti（Blackwell，`sm_120`，cc 12.0）**，工具链为 **CUDA 13.4**
+（`nvcc V13.4.92`）+ 驱动 **595.99.02**。`nvcc` 已认识 `compute_120`，因此直接产出原生 SASS，
+不依赖驱动 JIT：
 ```make
-GENCODE ?= -gencode arch=compute_90,code=compute_90
+GENCODE ?= -gencode arch=compute_120,code=sm_120
 ```
-已验证可正确运行。
+已实测：`--selftest` 全 PASS，且 `cuobjdump --list-elf` 显示产物为 `*.sm_120.cubin`
+（原生 SASS），`--list-ptx` 不再包含 PTX 段。
+
+**历史包袱（为什么以前是 `compute_90` PTX）**：早期工具链是 CUDA 12.4，其 `nvcc` 不认
+`sm_120`（`-arch=sm_120` 报 `Value 'sm_120' is not defined`），当时只能发 `compute_90` PTX
+由新驱动 JIT。升到 13.x 后这条路反而被堵：同一个驱动能 JIT 12.4 的 PTX（ISA 8.4），
+却拒绝 13.4 的 PTX（ISA 9.4）——所以仓库里旧二进制还能跑、新构建却跑不了，并不矛盾：
+
+| 组合 | 纯 PTX（`code=compute_XX`） | 原生 SASS（`code=sm_120`） |
+| --- | --- | --- |
+| CUDA 12.4 + 驱动 595.x（驱动更新） | ✅ 可 JIT（当时用法） | ❌ `nvcc` 不认 `sm_120` |
+| CUDA 13.4 + 驱动 595.99（工具链更新） | ❌ unsupported toolchain | ✅ **当前用法** |
 
 ### 10.4 为不同 GPU 覆盖架构
 ```bash
 make GENCODE="-gencode arch=compute_86,code=sm_86"   # RTX 30 系
 make GENCODE="-gencode arch=compute_89,code=sm_89"   # RTX 40 / L40
 ```
-> 经验：**先确认 nvcc 版本是否支持目标 GPU 架构**；若不支持，退而求其次用较老的
-> `compute_` PTX 让驱动 JIT，是快速可行的兼容方案。
+> 经验：**先对两张表——目标 GPU 要 `nvcc` 支持，嵌入的 PTX 要驱动支持**。
+> 优先嵌当前 GPU 的 SASS；只有当工具链不老于驱动时，才靠 `code=compute_XX` 的 PTX 做兼容。
+> 另：CUDA 13 已移除 `compute_61`/`compute_70` 等旧架构（`nvcc --list-gpu-arch` 从 `sm_75`
+> 起步），沿用旧 `-gencode` 会直接报 `Unsupported gpu architecture`。
 
 ---
 
 ## 11. 常见坑与最佳实践（本项目踩过的）
 
 1. **`atomicAdd` 无 `signed long long` 重载** → 64 位累加用 `unsigned long long`。
-2. **nvcc 版本与 GPU 架构不匹配**（12.4 不识 `sm_120`）→ 用 `compute_90` PTX + 驱动 JIT。
+2. **nvcc 与 GPU/驱动版本错配**：`nvcc` 不认目标架构时（12.4 不识 `sm_120`）可用较老
+   `compute_` PTX 让驱动 JIT；但**工具链比驱动新**时（13.4 的 PTX ISA 9.4 vs 驱动上限 13.2）
+   JIT 会被拒（`unsupported toolchain`），必须嵌原生 SASS——见第 10.3 节。
 3. **首次计时虚高**（升频 + 首次分配）→ 必须 warmup 并多次取均值。
 4. **可分离滤波 in-place 冲突** → 严格遵守 `dst != B` 的乒乓路由。
 5. **忘记边界判断** → 三维/一维核都要 `if (越界) return`。
