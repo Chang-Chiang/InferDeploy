@@ -9,8 +9,8 @@
 #include <unistd.h>
 
 bool TrtBackend::LoadModel(InferBase* pOwner) {
-    m_strEnginePath = ChangePath(pOwner->m_strOnnxPath, "../engine", ".engine",
-                                 pOwner->GetPrec(pOwner->m_cParams.m_ePrec));
+    m_strEnginePath =
+        ChangePath(pOwner->m_strOnnxPath, "../engine", ".engine", pOwner->GetPrec(pOwner->m_cParams.m_ePrec));
 
     if (!IsFileExist(m_strEnginePath)) {
         LOG("%s not found. Building trt engine...", m_strEnginePath.c_str());
@@ -58,8 +58,8 @@ bool TrtBackend::LoadModel(InferBase* pOwner) {
 
         // 根据模型读取输入维度（NCHW 含 batch: [N, C, H, W]），回写 Params.m_cImgInfo
         auto input = p_network->getInput(0);
-        auto dims = input->getDimensions();
-        int i_input_c, i_input_h, i_input_w;
+        auto dims  = input->getDimensions();
+        int  i_input_c, i_input_h, i_input_w;
         if (dims.nbDims == 4) {
             i_input_c = dims.d[1];
             i_input_h = dims.d[2];
@@ -100,7 +100,8 @@ bool TrtBackend::LoadModel(InferBase* pOwner) {
 
                 // 校准表路径带算法后缀：更换校准算法后 dynamic range 统计信息无法复用，必须重新校准
                 std::string str_calib_table = pOwner->m_cParams.m_eCalibAlgo == MINMAX
-                    ? "../calibration_table_minmax.txt" : "../calibration_table_entropy.txt";
+                                                  ? "../calibration_table_minmax.txt"
+                                                  : "../calibration_table_entropy.txt";
 
                 std::unique_ptr<nvinfer1::IInt8Calibrator> p_calibrator;
                 if (pOwner->m_cParams.m_eCalibAlgo == MINMAX) {
@@ -133,13 +134,13 @@ bool TrtBackend::LoadModel(InferBase* pOwner) {
 
         // 动态输入（如导出时启用 dynamic batch）需要设置 optimization profile，此处固定 batch=1
         for (int i = 0; i < p_network->getNbInputs(); i++) {
-            auto in = p_network->getInput(i);
-            nvinfer1::Dims d = in->getDimensions();
+            auto           in       = p_network->getInput(i);
+            nvinfer1::Dims d        = in->getDimensions();
             nvinfer1::Dims dims_min = d, dims_opt = d, dims_max = d;
-            bool b_dynamic = false;
+            bool           b_dynamic = false;
             for (int j = 0; j < d.nbDims; j++) {
                 if (d.d[j] == -1) {
-                    b_dynamic = true;
+                    b_dynamic     = true;
                     dims_min.d[j] = dims_opt.d[j] = dims_max.d[j] = 1;
                 }
             }
@@ -153,8 +154,7 @@ bool TrtBackend::LoadModel(InferBase* pOwner) {
             }
         }
 
-        TrtUniquePtr<nvinfer1::ICudaEngine> p_engine(
-            p_builder->buildEngineWithConfig(*p_network, *p_config));
+        TrtUniquePtr<nvinfer1::ICudaEngine> p_engine(p_builder->buildEngineWithConfig(*p_network, *p_config));
         if (!p_engine) {
             LOGE("Failed to build TensorRT engine");
             return false;
@@ -210,9 +210,9 @@ void TrtBackend::SetupRuntime(InferBase* pOwner, void const* pData, std::size_t 
     pOwner->m_vecOutputs.clear();
     for (int i = 0; i < m_pEngine->getNbIOTensors(); i++) {
         const char* ch_name = m_pEngine->getIOTensorName(i);
-        IoMeta c_meta;
-        c_meta.strName = ch_name;
-        auto nv_dims   = m_pEngine->getTensorShape(ch_name);
+        IoMeta      c_meta;
+        c_meta.strName     = ch_name;
+        auto nv_dims       = m_pEngine->getTensorShape(ch_name);
         c_meta.dims.nbDims = nv_dims.nbDims;
         for (int j = 0; j < nv_dims.nbDims; j++) {
             c_meta.dims.d[j] = nv_dims.d[j];
@@ -230,15 +230,13 @@ void TrtBackend::SetupRuntime(InferBase* pOwner, void const* pData, std::size_t 
 bool TrtBackend::BindBuffers(InferBase* pOwner) {
     // 输入绑定 device 缓冲；输出按任务类的缓冲访问器绑定（多输出任务各自管理）
     for (int i = 0; i < static_cast<int>(pOwner->m_vecInputs.size()); i++) {
-        if (!m_pContext->setTensorAddress(pOwner->m_vecInputs[i].strName.c_str(),
-                                          pOwner->GetInputDevicePtr(i))) {
+        if (!m_pContext->setTensorAddress(pOwner->m_vecInputs[i].strName.c_str(), pOwner->GetInputDevicePtr(i))) {
             LOGE("Failed to set input tensor address: %s", pOwner->m_vecInputs[i].strName.c_str());
             return false;
         }
     }
     for (int i = 0; i < static_cast<int>(pOwner->m_vecOutputs.size()); i++) {
-        if (!m_pContext->setTensorAddress(pOwner->m_vecOutputs[i].strName.c_str(),
-                                          pOwner->GetOutputDevicePtr(i))) {
+        if (!m_pContext->setTensorAddress(pOwner->m_vecOutputs[i].strName.c_str(), pOwner->GetOutputDevicePtr(i))) {
             LOGE("Failed to set output tensor address: %s", pOwner->m_vecOutputs[i].strName.c_str());
             return false;
         }
@@ -292,9 +290,9 @@ void TrtBackend::SavePlan(InferBase* pOwner, nvinfer1::IHostMemory& plan) {
     LOG("Engine saved to: %s", str_abs_path.c_str());
 }
 
-void TrtBackend::PrintNetwork(InferBase* pOwner, nvinfer1::INetworkDefinition &nvNetwork, bool bOptimized) {
+void TrtBackend::PrintNetwork(InferBase* pOwner, nvinfer1::INetworkDefinition& nvNetwork, bool bOptimized) {
 
-    int i_input_cnt = nvNetwork.getNbInputs();
+    int i_input_cnt  = nvNetwork.getNbInputs();
     int i_output_cnt = nvNetwork.getNbOutputs();
 
     for (int i = 0; i < i_input_cnt; i++) {
@@ -312,20 +310,16 @@ void TrtBackend::PrintNetwork(InferBase* pOwner, nvinfer1::INetworkDefinition &n
 
     if (!bOptimized) {
         for (int i = 0; i < i_layer_cnt; i++) {
-            auto layer   = nvNetwork.getLayer(i);
-            auto input   = layer->getInput(0);
-            if (input == nullptr){
+            auto layer = nvNetwork.getLayer(i);
+            auto input = layer->getInput(0);
+            if (input == nullptr) {
                 continue;
             }
-            auto output  = layer->getOutput(0);
+            auto output = layer->getOutput(0);
 
-            LOGV("layer_info: %-40s:%-25s->%-25s[%s]",
-                layer->getName(),
-                PrintTensorShape(input).c_str(),
-                PrintTensorShape(output).c_str(),
-                GetPrecision(layer->getPrecision()).c_str());
+            LOGV("layer_info: %-40s:%-25s->%-25s[%s]", layer->getName(), PrintTensorShape(input).c_str(),
+                 PrintTensorShape(output).c_str(), GetPrecision(layer->getPrecision()).c_str());
         }
-
     }
     else {
         // IEngineInspector 需先于 engine 释放，用 TrtUniquePtr 管理生命周期

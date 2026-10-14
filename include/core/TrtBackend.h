@@ -8,8 +8,8 @@
 #include "include/core/InferBase.h"
 
 /// @brief TensorRT 资源释放模板函数（TensorRT 10+ 已移除 destroy()，直接 delete）
-template<typename T>
-void DestroyTrtPtr(T* ptr){
+template <typename T>
+void DestroyTrtPtr(T* ptr) {
     if (ptr) {
         std::string str_type_name = typeid(T).name();
         LOGD("Destroy %s", str_type_name.c_str());
@@ -17,14 +17,14 @@ void DestroyTrtPtr(T* ptr){
     };
 }
 
-template<typename T>
+template <typename T>
 struct TrtDeleter {
     void operator()(T* ptr) const {
         DestroyTrtPtr(ptr);
     }
 };
 
-template<typename T>
+template <typename T>
 using TrtUniquePtr = std::unique_ptr<T, TrtDeleter<T>>;
 
 /// @brief TensorRT 推理后端：封装模型构建（onnx→engine）、加载、缓冲绑定与推理执行
@@ -52,8 +52,8 @@ private:
     void PrintNetwork(InferBase* pOwner, nvinfer1::INetworkDefinition& nvNetwork, bool bOptimized);
 
 private:
-    TrtUniquePtr<nvinfer1::IRuntime>           m_pRuntime;
-    TrtUniquePtr<nvinfer1::ICudaEngine>        m_pEngine;
-    TrtUniquePtr<nvinfer1::IExecutionContext>  m_pContext;
-    std::string m_strEnginePath;   // 引擎保存路径（按 onnx 路径 + 精度后缀生成）
+    TrtUniquePtr<nvinfer1::IRuntime>          m_pRuntime;
+    TrtUniquePtr<nvinfer1::ICudaEngine>       m_pEngine;
+    TrtUniquePtr<nvinfer1::IExecutionContext> m_pContext;
+    std::string                               m_strEnginePath;  // 引擎保存路径（按 onnx 路径 + 精度后缀生成）
 };

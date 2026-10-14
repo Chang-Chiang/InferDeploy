@@ -4,8 +4,7 @@
 #include "include/core/InferBase.h"
 #include "include/tasks/TaskUtils.h"
 
-
-class YoloDetector : public InferBase{
+class YoloDetector : public InferBase {
 
 public:
     YoloDetector(const std::string& strOnnxPath, Level cLevel, const Params& cParams,
@@ -21,11 +20,11 @@ public:
 
 private:
     std::vector<Bbox> m_vecBbox;
-    int m_iInputSize;
-    int m_iImgArea;
-    int m_iOutputSize;
-    Dims m_nvInputDims;
-    Dims m_nvOutputDims;
+    int               m_iInputSize;
+    int               m_iImgArea;
+    int               m_iOutputSize;
+    Dims              m_nvInputDims;
+    Dims              m_nvOutputDims;
 
 public:
     /// @brief 获取 NMS 后的最终检测框（PostprocessCpu 之后有效）
@@ -34,6 +33,5 @@ public:
 };
 
 // 外部调用的接口
-std::unique_ptr<YoloDetector> MakeDetector(
-    const std::string& strOnnxPath, Level cLevel, const Params& cParams,
-    std::shared_ptr<InferBackend> pBackend);
+std::unique_ptr<YoloDetector> MakeDetector(const std::string& strOnnxPath, Level cLevel, const Params& cParams,
+                                           std::shared_ptr<InferBackend> pBackend);

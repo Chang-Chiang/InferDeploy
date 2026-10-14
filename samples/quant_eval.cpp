@@ -32,19 +32,24 @@
 #include "include/utils/FileUtil.h"
 
 /// 验收线
-static constexpr float kClsAgreeMin      = 0.99f;  // 分类 top-1 一致率下限
-static constexpr float kDetMatchRateMin  = 0.95f;  // 检测框匹配率下限
-static constexpr float kDetMeanIouMin    = 0.90f;  // 匹配框平均 IoU 下限
-static constexpr float kConfDeltaMax     = 0.05f;  // 平均置信度差上限
+static constexpr float kClsAgreeMin     = 0.99f;  // 分类 top-1 一致率下限
+static constexpr float kDetMatchRateMin = 0.95f;  // 检测框匹配率下限
+static constexpr float kDetMeanIouMin   = 0.90f;  // 匹配框平均 IoU 下限
+static constexpr float kConfDeltaMax    = 0.05f;  // 平均置信度差上限
 
-struct ClsResult { int i_top1; float f_conf; };
-struct DetResult { std::vector<Bbox> vec_bbox; };
+struct ClsResult {
+    int   i_top1;
+    float f_conf;
+};
+struct DetResult {
+    std::vector<Bbox> vec_bbox;
+};
 
 /// 贪心匹配：按置信度降序遍历基准框，为每个基准框找同类别且 IoU 最大的未匹配框（IoU >= 0.5）
 struct MatchStat {
-    int   i_total    = 0;      // 基准（FP32）检测框总数
-    int   i_matched  = 0;      // 成功匹配的框数
-    float f_iou_sum  = 0.0f;   // 匹配框 IoU 累计
+    int   i_total          = 0;     // 基准（FP32）检测框总数
+    int   i_matched        = 0;     // 成功匹配的框数
+    float f_iou_sum        = 0.0f;  // 匹配框 IoU 累计
     float f_conf_delta_sum = 0.0f;  // 匹配框置信度差累计
 };
 
@@ -54,7 +59,7 @@ static MatchStat MatchBboxes(const std::vector<Bbox>& vec_ref, const std::vector
 
     std::vector<bool> vec_used(vec_cmp.size(), false);
     for (const auto& c_ref : vec_ref) {
-        int   i_best = -1;
+        int   i_best     = -1;
         float f_best_iou = 0.5f;  // 匹配阈值
         for (int j = 0; j < static_cast<int>(vec_cmp.size()); j++) {
             if (vec_used[j] || vec_cmp[j].m_iLabel != c_ref.m_iLabel) {
@@ -63,7 +68,7 @@ static MatchStat MatchBboxes(const std::vector<Bbox>& vec_ref, const std::vector
             float f_iou = IouCalc(c_ref, vec_cmp[j]);
             if (f_iou > f_best_iou) {
                 f_best_iou = f_iou;
-                i_best = j;
+                i_best     = j;
             }
         }
         if (i_best >= 0) {
@@ -84,8 +89,7 @@ static std::vector<std::string> LoadImageList(const std::string& str_path) {
     return LoadDataList(str_path);
 }
 
-int main(int argc, char const* argv[])
-{
+int main(int argc, char const* argv[]) {
     if (argc < 4) {
         printf("Usage: %s <cls|det|multi> <onnx_model_path> <image_list.txt 或图片路径>\n", argv[0]);
         return -1;
@@ -122,21 +126,23 @@ int main(int argc, char const* argv[])
     }
 
     // FP32 基准引擎 与 INT8 评估引擎（engine 路径按精度后缀自动区分）
-    Params c_params_fp32 = c_params; c_params_fp32.m_ePrec = FP32;
-    Params c_params_int8 = c_params; c_params_int8.m_ePrec = INT8;
+    Params c_params_fp32  = c_params;
+    c_params_fp32.m_ePrec = FP32;
+    Params c_params_int8  = c_params;
+    c_params_int8.m_ePrec = INT8;
 
     // INT8 优先使用显式量化模型 <base>-int8.onnx（由 data/models/quantize_yolo.py 生成），
     // 不存在时回退到同一 onnx 走 legacy calibrator 路径（仅 TRT 8.x 环境可用）
     std::string str_onnx_int8 = str_onnx;
-    std::string str_quantized  = str_onnx.substr(0, str_onnx.rfind(".onnx")) + "-int8.onnx";
+    std::string str_quantized = str_onnx.substr(0, str_onnx.rfind(".onnx")) + "-int8.onnx";
     if (IsFileExist(str_quantized)) {
         str_onnx_int8 = str_quantized;
         printf("INT8 worker uses explicitly quantized model: %s\n", str_onnx_int8.c_str());
     }
 
-    auto e_level   = Level::INFO;
-    auto p_fp32    = CreateWorker(str_onnx, e_level, c_params_fp32);
-    auto p_int8    = CreateWorker(str_onnx_int8, e_level, c_params_int8);
+    auto e_level = Level::INFO;
+    auto p_fp32  = CreateWorker(str_onnx, e_level, c_params_fp32);
+    auto p_int8  = CreateWorker(str_onnx_int8, e_level, c_params_int8);
 
     auto vec_images = LoadImageList(str_imgs);
     if (vec_images.empty()) {
@@ -145,9 +151,9 @@ int main(int argc, char const* argv[])
     }
 
     // 统计量
-    int   i_total          = 0;
-    int   i_cls_agree      = 0;
-    float f_cls_delta_sum  = 0.0f;
+    int       i_total         = 0;
+    int       i_cls_agree     = 0;
+    float     f_cls_delta_sum = 0.0f;
     MatchStat c_det_stat;
 
     printf("\n%-8s | %-28s | %-28s\n", "image", "FP32", "INT8");
@@ -166,13 +172,13 @@ int main(int argc, char const* argv[])
             i_total++;
             f_cls_delta_sum += std::abs(c_res_fp32.second - c_res_int8.second);
             bool b_agree = (c_res_fp32.first == c_res_int8.first);
-            if (b_agree) i_cls_agree++;
+            if (b_agree) {
+                i_cls_agree++;
+            }
 
-            printf("%-8s | top1=%-5d conf=%.4f      | top1=%-5d conf=%.4f      %s\n",
-                GetFileName(str_img).c_str(),
-                c_res_fp32.first, c_res_fp32.second,
-                c_res_int8.first, c_res_int8.second,
-                b_agree ? "" : "  <-- MISMATCH");
+            printf("%-8s | top1=%-5d conf=%.4f      | top1=%-5d conf=%.4f      %s\n", GetFileName(str_img).c_str(),
+                   c_res_fp32.first, c_res_fp32.second, c_res_int8.first, c_res_int8.second,
+                   b_agree ? "" : "  <-- MISMATCH");
         }
         else {
             std::vector<Bbox> vec_fp32, vec_int8;
@@ -193,10 +199,8 @@ int main(int argc, char const* argv[])
             c_det_stat.f_conf_delta_sum += c_stat.f_conf_delta_sum;
 
             printf("%-8s | boxes=%-3d                     | boxes=%-3d                     | matched=%d\n",
-                GetFileName(str_img).c_str(),
-                static_cast<int>(vec_fp32.size()),
-                static_cast<int>(vec_int8.size()),
-                c_stat.i_matched);
+                   GetFileName(str_img).c_str(), static_cast<int>(vec_fp32.size()), static_cast<int>(vec_int8.size()),
+                   c_stat.i_matched);
         }
     }
 
@@ -207,7 +211,7 @@ int main(int argc, char const* argv[])
     if (c_params.m_eTask == CLASSIFICATION) {
         float f_agree = i_total ? static_cast<float>(i_cls_agree) / i_total : 0.0f;
         float f_delta = i_total ? f_cls_delta_sum / i_total : 0.0f;
-        b_pass = (f_agree >= kClsAgreeMin) && (f_delta <= kConfDeltaMax);
+        b_pass        = (f_agree >= kClsAgreeMin) && (f_delta <= kConfDeltaMax);
 
         printf("Task:        CLASSIFICATION\n");
         printf("Images:      %d\n", i_total);
@@ -218,12 +222,13 @@ int main(int argc, char const* argv[])
         float f_match = c_det_stat.i_total ? static_cast<float>(c_det_stat.i_matched) / c_det_stat.i_total : 0.0f;
         float f_iou   = c_det_stat.i_matched ? c_det_stat.f_iou_sum / c_det_stat.i_matched : 0.0f;
         float f_delta = c_det_stat.i_matched ? c_det_stat.f_conf_delta_sum / c_det_stat.i_matched : 0.0f;
-        b_pass = (f_match >= kDetMatchRateMin) && (f_iou >= kDetMeanIouMin) && (f_delta <= kConfDeltaMax);
+        b_pass        = (f_match >= kDetMatchRateMin) && (f_iou >= kDetMeanIouMin) && (f_delta <= kConfDeltaMax);
 
         printf("Task:        %s\n", c_params.m_eTask == DETECTION ? "DETECTION" : "MULTITASK");
         printf("Images:      %d\n", i_total);
         printf("Boxes:       %d (FP32 baseline), %d matched\n", c_det_stat.i_total, c_det_stat.i_matched);
-        printf("Match rate:  %.2f%%   (accept >= %.2f%%, IoU >= 0.5, same label)\n", f_match * 100, kDetMatchRateMin * 100);
+        printf("Match rate:  %.2f%%   (accept >= %.2f%%, IoU >= 0.5, same label)\n", f_match * 100,
+               kDetMatchRateMin * 100);
         printf("Mean IoU:    %.4f  (accept >= %.4f, matched boxes)\n", f_iou, kDetMeanIouMin);
         printf("Conf delta:  %.4f  (accept <= %.4f, matched boxes)\n", f_delta, kConfDeltaMax);
     }

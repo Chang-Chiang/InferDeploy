@@ -27,22 +27,25 @@ public:
     virtual bool PostprocessCpu() override;
 
 private:
-    cv::Mat m_matMask;        // 0/255 二值 mask（原图尺寸）
-    int m_iInputSize;         // 输入缓冲字节数
-    int m_iOutputSize;        // 输出缓冲字节数
-    Dims m_nvInputDims;
-    Dims m_nvOutputDims;
-    bool m_bSaveDebug = true; // 是否在 PostprocessCpu 中落盘结果图（体数据批量分割时可关闭）
+    cv::Mat m_matMask;      // 0/255 二值 mask（原图尺寸）
+    int     m_iInputSize;   // 输入缓冲字节数
+    int     m_iOutputSize;  // 输出缓冲字节数
+    Dims    m_nvInputDims;
+    Dims    m_nvOutputDims;
+    bool    m_bSaveDebug = true;  // 是否在 PostprocessCpu 中落盘结果图（体数据批量分割时可关闭）
 
 public:
     /// @brief 获取分割结果（PostprocessCpu 之后有效）
     /// @return 0/255 二值 mask（原图尺寸）
-    cv::Mat GetMask() const { return m_matMask; }
+    cv::Mat GetMask() const {
+        return m_matMask;
+    }
 
     /// @brief 体数据批量分割时关闭逐层落盘，由调用方统一写 3D 输出
-    void SetSaveDebug(bool bEnable) { m_bSaveDebug = bEnable; }
+    void SetSaveDebug(bool bEnable) {
+        m_bSaveDebug = bEnable;
+    }
 };
 
-std::unique_ptr<UnetSegmenter> MakeUnetSegmenter(
-    const std::string& strOnnxPath, Level cLevel, const Params& cParams,
-    std::shared_ptr<InferBackend> pBackend);
+std::unique_ptr<UnetSegmenter> MakeUnetSegmenter(const std::string& strOnnxPath, Level cLevel, const Params& cParams,
+                                                 std::shared_ptr<InferBackend> pBackend);

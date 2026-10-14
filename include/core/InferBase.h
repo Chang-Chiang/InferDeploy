@@ -12,8 +12,8 @@
 
 /// @brief 输入/输出张量元信息（由后端在 LoadModel 时填充）
 struct IoMeta {
-    std::string strName;   // 张量名
-    Dims        dims;      // 张量维度（NCHW）
+    std::string strName;  // 张量名
+    Dims        dims;     // 张量维度（NCHW）
 };
 
 class InferBase;  // 前向声明
@@ -75,29 +75,43 @@ public:
     virtual bool PostprocessCpu() = 0;
 
     /// @brief GPU 后处理，默认委托给 PostprocessCpu()，子类可覆盖实现真正的 GPU 后处理
-    virtual bool PostprocessGpu() { return PostprocessCpu(); }
+    virtual bool PostprocessGpu() {
+        return PostprocessCpu();
+    }
 
 protected:
     /// @brief 释放通用 host/device 缓冲与 CUDA stream
     void CleanupBuffers();
 
     /// @brief 任务类自有缓冲（如 Multitask 的双输出）的释放钩子，析构时调用
-    virtual void ReleaseExtraBuffers() {}
+    virtual void ReleaseExtraBuffers() {
+    }
 
 public:
     // ---- 缓冲地址访问器（后端 BindBuffers/Enqueue 时使用；多输出任务类可重写） ----
-    virtual float* GetInputHostPtr(int i)    { return m_pInputMemory[0]; }
-    virtual float* GetInputDevicePtr(int i)  { return m_pInputMemory[1]; }
-    virtual float* GetOutputHostPtr(int i)   { return m_pOutputMemory[0]; }
-    virtual float* GetOutputDevicePtr(int i) { return m_pOutputMemory[1]; }
+    virtual float* GetInputHostPtr(int i) {
+        return m_pInputMemory[0];
+    }
+
+    virtual float* GetInputDevicePtr(int i) {
+        return m_pInputMemory[1];
+    }
+
+    virtual float* GetOutputHostPtr(int i) {
+        return m_pOutputMemory[0];
+    }
+
+    virtual float* GetOutputDevicePtr(int i) {
+        return m_pOutputMemory[1];
+    }
 
 public:
-    std::string m_strImagePath;    // 输入图像路径
-    std::string m_strOutputPath;   // 输出路径
-    std::string m_strOnnxPath;     // onnx 模型路径
+    std::string m_strImagePath;   // 输入图像路径
+    std::string m_strOutputPath;  // 输出路径
+    std::string m_strOnnxPath;    // onnx 模型路径
 
     cv::Mat m_matInputImage;  // 输入图像的 Mat 对象
-    Params m_cParams;
+    Params  m_cParams;
 
     // 通用输入/输出缓冲：[0] host（pinned），[1] device
     float* m_pInputMemory[2];
@@ -107,7 +121,7 @@ public:
     std::vector<IoMeta> m_vecInputs;
     std::vector<IoMeta> m_vecOutputs;
 
-    cudaStream_t m_cuStream;      // cuda 流（预处理异步拷贝/后端推理共用）
+    cudaStream_t m_cuStream;  // cuda 流（预处理异步拷贝/后端推理共用）
 
     Logger m_cLogger;
     Timer  m_cTimer;

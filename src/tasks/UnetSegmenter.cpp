@@ -37,8 +37,7 @@ bool UnetSegmenter::PreprocessCpu() {
     m_cTimer.StartCpu();
 
     cv::Mat mat_resized;
-    cv::resize(m_matInputImage, mat_resized,
-               cv::Size(m_nvInputDims.d[3], m_nvInputDims.d[2]), 0, 0, cv::INTER_LINEAR);
+    cv::resize(m_matInputImage, mat_resized, cv::Size(m_nvInputDims.d[3], m_nvInputDims.d[2]), 0, 0, cv::INTER_LINEAR);
 
     int i_area = m_nvInputDims.d[2] * m_nvInputDims.d[3];
     for (int i = 0; i < i_area; i++) {
@@ -55,13 +54,13 @@ bool UnetSegmenter::PreprocessCpu() {
 bool UnetSegmenter::PreprocessGpu() {
     m_matInputImage = cv::imread(m_strImagePath, cv::IMREAD_GRAYSCALE);
     if (m_matInputImage.data == nullptr) {
-        LOGE("ERROR: file not founded! Program terminated"); return false;
+        LOGE("ERROR: file not founded! Program terminated");
+        return false;
     }
 
     m_cTimer.StartGpu();
 
-    ResizeGrayGpu(m_matInputImage, m_pInputMemory[1],
-                  m_nvInputDims.d[2], m_nvInputDims.d[3],
+    ResizeGrayGpu(m_matInputImage, m_pInputMemory[1], m_nvInputDims.d[2], m_nvInputDims.d[3],
                   InterpolationTactics::GPU_BILINEAR);
 
     m_cTimer.StopGpu("preprocess(GPU)");
@@ -84,8 +83,8 @@ bool UnetSegmenter::PostprocessCpu() {
     cv::threshold(mat_prob, mat_mask_small, 0.5, 255, cv::THRESH_BINARY);
     mat_mask_small.convertTo(mat_mask_small, CV_8U);
 
-    int i_liver_pixels = cv::countNonZero(mat_mask_small);
-    float f_ratio = 100.0f * i_liver_pixels / (i_h * i_w);
+    int   i_liver_pixels = cv::countNonZero(mat_mask_small);
+    float f_ratio        = 100.0f * i_liver_pixels / (i_h * i_w);
 
     // mask 上采样回原图尺寸，红色半透明叠加
     cv::Mat mat_mask_full;
@@ -110,8 +109,8 @@ bool UnetSegmenter::PostprocessCpu() {
         return true;  // 体数据批量分割：调用方通过 GetMask() 取结果，跳过逐层落盘
     }
 
-    std::string str_tag = "liver-" + GetPrec(m_cParams.m_ePrec);
-    m_strOutputPath = ChangePath(m_strImagePath, "../result", ".png", str_tag);
+    std::string str_tag     = "liver-" + GetPrec(m_cParams.m_ePrec);
+    m_strOutputPath         = ChangePath(m_strImagePath, "../result", ".png", str_tag);
     std::string str_out_dir = m_strOutputPath.substr(0, m_strOutputPath.find_last_of("/"));
     if (!IsFileExist(str_out_dir) && !CreateDir(str_out_dir)) {
         LOGE("Failed to create result directory: %s", str_out_dir.c_str());
@@ -135,9 +134,7 @@ bool UnetSegmenter::PostprocessCpu() {
     return true;
 }
 
-std::unique_ptr<UnetSegmenter> MakeUnetSegmenter(
-    const std::string& strOnnxPath, Level cLevel, const Params& cParams,
-    std::shared_ptr<InferBackend> pBackend)
-{
+std::unique_ptr<UnetSegmenter> MakeUnetSegmenter(const std::string& strOnnxPath, Level cLevel, const Params& cParams,
+                                                 std::shared_ptr<InferBackend> pBackend) {
     return std::make_unique<UnetSegmenter>(strOnnxPath, cLevel, cParams, std::move(pBackend));
 }

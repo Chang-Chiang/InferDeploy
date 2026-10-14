@@ -2,8 +2,8 @@
 
 #include <cuda_runtime.h>
 
-#define CUDA_CHECK(call)             __cudaCheck(call, __FILE__, __LINE__)
-#define LAST_KERNEL_CHECK(call)      __kernelCheck(__FILE__, __LINE__)
+#define CUDA_CHECK(call)        __cudaCheck(call, __FILE__, __LINE__)
+#define LAST_KERNEL_CHECK(call) __kernelCheck(__FILE__, __LINE__)
 
 static void __cudaCheck(cudaError_t err, const char* file, const int line) {
     if (err != cudaSuccess) {

@@ -4,7 +4,7 @@
 Level Logger::m_eLevel = Level::INFO;
 
 Logger::Logger(Level eLevel) {
-    m_eLevel = eLevel;
+    m_eLevel     = eLevel;
     m_nvSeverity = GetSeverity(eLevel);
 }
 
@@ -29,7 +29,7 @@ Logger::Severity Logger::GetSeverity(Level eLevel) {
         // TensorRT 详细信息，调试信息
         case Level::VERB:
             return Severity::kVERBOSE;
-        
+
         default:
             return Severity::kVERBOSE;
     }
@@ -57,25 +57,36 @@ Level Logger::GetLevel(Severity nvSeverity) {
 void Logger::log(Severity nvSeverity, const char* msg) noexcept {
     // TensorRT log 比较多，限制只输出 WARN 级别以上的日志
     // 或者当日志级别设置为 DEBUG 时输出所有日志
-    if (nvSeverity <= GetSeverity(Level::WARN) ||
-        m_eLevel >= Level::DEBUG) {
+    if (nvSeverity <= GetSeverity(Level::WARN) || m_eLevel >= Level::DEBUG) {
         __log_info(GetLevel(nvSeverity), "%s", msg);
     }
 }
 
 void Logger::__log_info(Level eLevel, const char* pFormat, ...) {
-    char msg[1000];           // 缓存日志信息的最大长度，1000 字符长度的缓存
+    char    msg[1000];        // 缓存日志信息的最大长度，1000 字符长度的缓存
     va_list args;             // 定义可变参数列表
     va_start(args, pFormat);  // 初始化可变参数列表，pFormat 是最后一个固定参数
     int n = 0;
-    
+
     switch (eLevel) {
-        case Level::DEBUG: n += snprintf(msg + n, sizeof(msg) - n, DGREEN "[debug]" CLEAR); break;
-        case Level::VERB:  n += snprintf(msg + n, sizeof(msg) - n, PURPLE "[verb]" CLEAR); break;
-        case Level::INFO:  n += snprintf(msg + n, sizeof(msg) - n, YELLOW "[info]" CLEAR); break;
-        case Level::WARN:  n += snprintf(msg + n, sizeof(msg) - n, BLUE "[warn]" CLEAR); break;
-        case Level::ERROR: n += snprintf(msg + n, sizeof(msg) - n, RED "[error]" CLEAR); break;
-        default:           n += snprintf(msg + n, sizeof(msg) - n, RED "[fatal]" CLEAR); break;
+        case Level::DEBUG:
+            n += snprintf(msg + n, sizeof(msg) - n, DGREEN "[debug]" CLEAR);
+            break;
+        case Level::VERB:
+            n += snprintf(msg + n, sizeof(msg) - n, PURPLE "[verb]" CLEAR);
+            break;
+        case Level::INFO:
+            n += snprintf(msg + n, sizeof(msg) - n, YELLOW "[info]" CLEAR);
+            break;
+        case Level::WARN:
+            n += snprintf(msg + n, sizeof(msg) - n, BLUE "[warn]" CLEAR);
+            break;
+        case Level::ERROR:
+            n += snprintf(msg + n, sizeof(msg) - n, RED "[error]" CLEAR);
+            break;
+        default:
+            n += snprintf(msg + n, sizeof(msg) - n, RED "[fatal]" CLEAR);
+            break;
     }
 
     // 格式化可变参数列表，并返回格式化后的长度，追加到 msg 中

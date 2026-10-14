@@ -7,18 +7,18 @@
 
 #define LOGF(...) Logger::__log_info(Level::FATAL, __VA_ARGS__)
 #define LOGE(...) Logger::__log_info(Level::ERROR, __VA_ARGS__)
-#define LOGW(...) Logger::__log_info(Level::WARN,  __VA_ARGS__)
-#define LOG(...)  Logger::__log_info(Level::INFO,  __VA_ARGS__)
-#define LOGV(...) Logger::__log_info(Level::VERB,  __VA_ARGS__)
+#define LOGW(...) Logger::__log_info(Level::WARN, __VA_ARGS__)
+#define LOG(...)  Logger::__log_info(Level::INFO, __VA_ARGS__)
+#define LOGV(...) Logger::__log_info(Level::VERB, __VA_ARGS__)
 #define LOGD(...) Logger::__log_info(Level::DEBUG, __VA_ARGS__)
 
-#define DGREEN    "\033[1;36m"
-#define BLUE      "\033[1;34m"
-#define PURPLE    "\033[1;35m"
-#define GREEN     "\033[1;32m"
-#define YELLOW    "\033[1;33m"
-#define RED       "\033[1;31m"
-#define CLEAR     "\033[0m"
+#define DGREEN "\033[1;36m"
+#define BLUE   "\033[1;34m"
+#define PURPLE "\033[1;35m"
+#define GREEN  "\033[1;32m"
+#define YELLOW "\033[1;33m"
+#define RED    "\033[1;31m"
+#define CLEAR  "\033[0m"
 
 /// @brief 日志级别枚举类，定义了不同的日志级别
 enum class Level : int32_t {
@@ -61,7 +61,6 @@ public:
     Level GetLevel(Severity nvSeverity);
 
 private:
-    static Level m_eLevel;  // 不同实例之间共享同一日志级别
-    Severity m_nvSeverity;  // 当前日志级别对应的 TensorRT Severity
+    static Level m_eLevel;      // 不同实例之间共享同一日志级别
+    Severity     m_nvSeverity;  // 当前日志级别对应的 TensorRT Severity
 };
-

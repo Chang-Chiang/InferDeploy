@@ -65,8 +65,7 @@ void InferBase::InitModel() {
     if (m_vecInputs.empty()) {
         // 首次初始化：加载模型 → 任务类分配缓冲 → 后端绑定缓冲
         if (!m_pBackend->LoadModel(this)) {
-            LOGE("LoadModel failed! backend: %s",
-                 m_cParams.m_eBackend == OPENVINO ? "OpenVINO" : "TensorRT");
+            LOGE("LoadModel failed! backend: %s", m_cParams.m_eBackend == OPENVINO ? "OpenVINO" : "TensorRT");
             return;
         }
         SetupIoBuffers();
@@ -105,9 +104,12 @@ void InferBase::Inference() {
 }
 
 std::string InferBase::GetPrec(Precision cPrec) {
-    switch(cPrec) {
-        case Precision::FP16:   return "fp16";
-        case Precision::INT8:   return "int8";
-        default:                return "fp32";
+    switch (cPrec) {
+        case Precision::FP16:
+            return "fp16";
+        case Precision::INT8:
+            return "int8";
+        default:
+            return "fp32";
     }
 }

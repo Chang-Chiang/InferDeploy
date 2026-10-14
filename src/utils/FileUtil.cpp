@@ -16,9 +16,9 @@ bool CreateDir(const std::string& strDir) {
     return std::filesystem::create_directories(strDir);
 }
 
-bool IsFileReadSuccess(const std::string &strPath, std::vector<unsigned char> &vecData, size_t &iSize){
+bool IsFileReadSuccess(const std::string& strPath, std::vector<unsigned char>& vecData, size_t& iSize) {
     std::stringstream ss_model;
-    std::ifstream cache(strPath);
+    std::ifstream     cache(strPath);
 
     ss_model.seekg(0, ss_model.beg);
     ss_model << cache.rdbuf();
@@ -35,7 +35,7 @@ bool IsFileReadSuccess(const std::string &strPath, std::vector<unsigned char> &v
     return true;
 }
 
-std::vector<unsigned char> LoadFile(const std::string &strFile) {
+std::vector<unsigned char> LoadFile(const std::string& strFile) {
     std::ifstream in(strFile, std::ios::in | std::ios::binary);
     if (!in.is_open()) {
         return {};
@@ -56,7 +56,7 @@ std::vector<unsigned char> LoadFile(const std::string &strFile) {
 
 std::vector<std::string> LoadDataList(const std::string& strFile) {
     std::vector<std::string> vec_list;
-    auto *pf = fopen(strFile.c_str(), "r");
+    auto*                    pf = fopen(strFile.c_str(), "r");
     if (!pf) {
         LOGE("Failed to open %s", strFile.c_str());
     }
@@ -64,7 +64,7 @@ std::vector<std::string> LoadDataList(const std::string& strFile) {
     char c_str[512];
     while (fgets(c_str, 512, pf) != NULL) {
         for (int i = 0; c_str[i] != '\0'; ++i) {
-            if (c_str[i] == '\n'){
+            if (c_str[i] == '\n') {
                 c_str[i] = '\0';
                 break;
             }
@@ -79,8 +79,8 @@ std::string ChangePath(std::string srcPath, std::string strRelativePath, std::st
     int i_name_l = srcPath.rfind("/");
     int i_name_r = srcPath.rfind(".");
 
-    int i_dir_l  = 0;
-    int i_dir_r  = srcPath.rfind("/");
+    int i_dir_l = 0;
+    int i_dir_r = srcPath.rfind("/");
 
     std::string str_new_path;
 
@@ -99,7 +99,7 @@ std::string ChangePath(std::string srcPath, std::string strRelativePath, std::st
 }
 
 std::string GetOutputPath(std::string srcPath, std::string strPostfix) {
-    int i_pos = srcPath.rfind(".");
+    int         i_pos = srcPath.rfind(".");
     std::string str_tar_path;
     str_tar_path = srcPath.substr(0, i_pos);
     str_tar_path += "_" + strPostfix + ".png";
@@ -107,14 +107,14 @@ std::string GetOutputPath(std::string srcPath, std::string strPostfix) {
 }
 
 std::string GetFileType(std::string strFilePath) {
-    int i_pos = strFilePath.rfind(".");
+    int         i_pos = strFilePath.rfind(".");
     std::string str_suffix;
     str_suffix = strFilePath.substr(i_pos, strFilePath.length());
     return str_suffix;
 }
 
 std::string GetFileName(std::string strFilePath) {
-    int i_pos = strFilePath.rfind("/");
+    int         i_pos = strFilePath.rfind("/");
     std::string str_suffix;
     str_suffix = strFilePath.substr(i_pos + 1, strFilePath.length());
     return str_suffix;

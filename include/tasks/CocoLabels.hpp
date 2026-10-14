@@ -7,9 +7,9 @@
 class CocoLabels {
 public:
     CocoLabels() {
-        for(int i = 0 ; i < 80; i ++) {
+        for (int i = 0; i < 80; i++) {
             std::string x = "NA";
-            m_vecLabel.push_back( x );
+            m_vecLabel.push_back(x);
         }
 
         m_vecLabel[0]  = "person";
@@ -95,7 +95,7 @@ public:
     }
 
     std::string CocoGetLabel(int i) {
-        assert( i >= 0 && i < 80 );
+        assert(i >= 0 && i < 80);
         return m_vecLabel[i];
     }
 
@@ -120,8 +120,6 @@ public:
         return cv::Scalar(blue, green, red);
     }
 
-
 private:
     std::vector<std::string> m_vecLabel;
-
 };

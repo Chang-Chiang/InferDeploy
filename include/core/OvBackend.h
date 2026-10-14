@@ -2,13 +2,13 @@
 
 #ifdef ENABLE_OPENVINO
 
-#include <memory>
-#include <string>
-#include <vector>
+    #include <memory>
+    #include <string>
+    #include <vector>
 
-#include <openvino/openvino.hpp>
+    #include <openvino/openvino.hpp>
 
-#include "include/core/InferBase.h"
+    #include "include/core/InferBase.h"
 
 /// @brief OpenVINO 推理后端：读取 ONNX → 编译模型 → 推理
 /// 说明：
@@ -24,9 +24,9 @@ public:
     void Release() override;
 
 private:
-    std::shared_ptr<ov::Model>            m_pModel;
-    ov::CompiledModel                     m_compiledModel;
-    ov::InferRequest                      m_inferRequest;
+    std::shared_ptr<ov::Model> m_pModel;
+    ov::CompiledModel          m_compiledModel;
+    ov::InferRequest           m_inferRequest;
 
     /// @brief IoMeta → ov::Shape
     static ov::Shape ToOvShape(const Dims& cDims);
@@ -35,4 +35,4 @@ private:
     static std::size_t ElementsCount(const Dims& cDims);
 };
 
-#endif // ENABLE_OPENVINO
+#endif  // ENABLE_OPENVINO

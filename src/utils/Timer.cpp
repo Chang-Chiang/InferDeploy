@@ -3,9 +3,9 @@
 #include "include/utils/CudaCheck.h"
 
 Timer::Timer() {
-    m_fTimeElasped = 0;
+    m_fTimeElasped  = 0;
     m_pointCpuStart = std::chrono::high_resolution_clock::now();
-    m_pointCpuStop = std::chrono::high_resolution_clock::now();
+    m_pointCpuStop  = std::chrono::high_resolution_clock::now();
     cudaEventCreate(&m_eventGpuStart);
     cudaEventCreate(&m_eventGpuStop);
 }
@@ -35,7 +35,7 @@ void Timer::StopGpu() {
     cudaEventRecord(m_eventGpuStop, 0);
 }
 
-void Timer::StopGpu(std::string strMsg){
+void Timer::StopGpu(std::string strMsg) {
     cudaEventRecord(m_eventGpuStop, 0);
     char c_buff[100];
 

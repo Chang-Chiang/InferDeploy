@@ -37,16 +37,20 @@ enum CalibAlgo {
 
 /// @brief 推理后端类别
 enum InferBackendType {
-    TENSORRT,   // NVIDIA TensorRT（GPU）
-    OPENVINO    // Intel OpenVINO（CPU/GPU，需 ENABLE_OPENVINO 编译开关）
+    TENSORRT,  // NVIDIA TensorRT（GPU）
+    OPENVINO   // Intel OpenVINO（CPU/GPU，需 ENABLE_OPENVINO 编译开关）
 };
 
 /// @brief 后端无关的张量维度描述（兼容 xxx.d[i] 访问习惯）
 struct Dims {
     int nbDims = 0;
     int d[8]   = {};
-    int operator[](int i) const { return d[i]; }
-    int& operator[](int i)      { return d[i]; }
+    int operator[](int i) const {
+        return d[i];
+    }
+    int& operator[](int i) {
+        return d[i];
+    }
 };
 
 /// @brief 图像信息
@@ -57,7 +61,8 @@ struct ImageInfo {
     ImageInfo(int iHeight, int iWidth, int iChannel)
         : m_iHeight(iHeight)
         , m_iWidth(iWidth)
-        , m_iChannel(iChannel) {}
+        , m_iChannel(iChannel) {
+    }
 };
 
 /// @brief 模型构建参数
@@ -69,9 +74,10 @@ struct Params {
     TaskType             m_eTask                = CLASSIFICATION;
     int                  m_iWorkspaceSize       = WORKSPACESIZE;
     Precision            m_ePrec                = FP32;
-    int                  m_iCalibBatchSize      = 64;   // INT8 校准 batch size
+    int                  m_iCalibBatchSize      = 64;                                     // INT8 校准 batch size
     std::string          m_strCalibListPath     = "../calibration/calibration_list.txt";  // 校准数据列表路径
-    CalibAlgo            m_eCalibAlgo           = ENTROPY;  // INT8 校准算法
-    InferBackendType     m_eBackend             = TENSORRT; // 推理后端
+    CalibAlgo            m_eCalibAlgo           = ENTROPY;                                // INT8 校准算法
+    InferBackendType     m_eBackend             = TENSORRT;                               // 推理后端
+
     std::vector<std::string> m_vecFp32Layers;  // 需要强制 FP32 精度的层名列表
 };

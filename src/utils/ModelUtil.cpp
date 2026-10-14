@@ -15,23 +15,29 @@ std::string PrintTensorShape(nvinfer1::ITensor* nvTensor) {
 }
 
 std::string GetPrecision(nvinfer1::DataType nvDataType) {
-    switch(nvDataType) {
-        case nvinfer1::DataType::kFLOAT:  return "FP32";
-        case nvinfer1::DataType::kHALF:   return "FP16";
-        case nvinfer1::DataType::kINT32:  return "INT32";
-        case nvinfer1::DataType::kINT8:   return "INT8";
-        case nvinfer1::DataType::kUINT8:  return "UINT8";
-        default:                          return "unknown";
+    switch (nvDataType) {
+        case nvinfer1::DataType::kFLOAT:
+            return "FP32";
+        case nvinfer1::DataType::kHALF:
+            return "FP16";
+        case nvinfer1::DataType::kINT32:
+            return "INT32";
+        case nvinfer1::DataType::kINT8:
+            return "INT8";
+        case nvinfer1::DataType::kUINT8:
+            return "UINT8";
+        default:
+            return "unknown";
     }
 }
 
 std::string PrintDims(const nvinfer1::Dims nvDims) {
-    int i_n = 0;
-    char c_buff[100];
+    int         i_n = 0;
+    char        c_buff[100];
     std::string str_res;
 
     i_n += snprintf(c_buff + i_n, sizeof(c_buff) - i_n, "[ ");
-    for (int i = 0; i < nvDims.nbDims; i++){
+    for (int i = 0; i < nvDims.nbDims; i++) {
         i_n += snprintf(c_buff + i_n, sizeof(c_buff) - i_n, "%d", nvDims.d[i]);
         if (i != nvDims.nbDims - 1) {
             i_n += snprintf(c_buff + i_n, sizeof(c_buff) - i_n, ", ");
@@ -43,13 +49,13 @@ std::string PrintDims(const nvinfer1::Dims nvDims) {
 }
 
 std::string PrintTensor(float* pTensor, int iSize) {
-    int i_n = 0;
-    char c_buff[100];
+    int         i_n = 0;
+    char        c_buff[100];
     std::string str_res;
     i_n += snprintf(c_buff + i_n, sizeof(c_buff) - i_n, "[ ");
-    for (int i = 0; i < iSize; i++){
+    for (int i = 0; i < iSize; i++) {
         i_n += snprintf(c_buff + i_n, sizeof(c_buff) - i_n, "%8.4lf", pTensor[i]);
-        if (i != iSize - 1){
+        if (i != iSize - 1) {
             i_n += snprintf(c_buff + i_n, sizeof(c_buff) - i_n, ", ");
         }
     }

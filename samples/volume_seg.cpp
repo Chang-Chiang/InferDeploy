@@ -31,20 +31,20 @@
 
 #include "include/tasks/Worker.h"
 
-int main(int argc, char const* argv[])
-{
+int main(int argc, char const* argv[]) {
     if (argc < 4) {
         printf("Usage: %s <onnx_path> <input_slice_dir> <output_dir> [trt|ov] "
-               "[--spacing dx dy dz] [--post3d [extra liver3d args...]]\n", argv[0]);
+               "[--spacing dx dy dz] [--post3d [extra liver3d args...]]\n",
+               argv[0]);
         return -1;
     }
 
-    std::string str_onnx    = argv[1];
-    std::string str_in      = argv[2];
-    std::string str_out     = argv[3];
-    std::string str_backend = "trt";
-    float arr_spacing[3]    = {1.0f, 1.0f, 1.0f};
-    bool  b_post3d          = false;
+    std::string str_onnx       = argv[1];
+    std::string str_in         = argv[2];
+    std::string str_out        = argv[3];
+    std::string str_backend    = "trt";
+    float       arr_spacing[3] = {1.0f, 1.0f, 1.0f};
+    bool        b_post3d       = false;
     std::string str_post3d_extra;
 
     for (int i = 4; i < argc; i++) {
@@ -89,8 +89,8 @@ int main(int argc, char const* argv[])
     c_params.m_ePrec    = FP32;
     c_params.m_eBackend = (str_backend == "ov") ? OPENVINO : TENSORRT;
 
-    auto p_worker = CreateWorker(str_onnx, Level::INFO, c_params);
-    auto* p_seg   = p_worker->m_pUnetSegmenter.get();
+    auto  p_worker = CreateWorker(str_onnx, Level::INFO, c_params);
+    auto* p_seg    = p_worker->m_pUnetSegmenter.get();
     p_seg->SetSaveDebug(false);  // 关闭逐层落盘，统一写 3D 输出
 
     // 3D 后处理输入目录
@@ -100,9 +100,9 @@ int main(int argc, char const* argv[])
     std::ofstream f_summary(str_out + "/summary.txt");
     f_summary << "slice\tliver_pixels\tliver_ratio(%)\n";
 
-    int i_w = 0, i_h = 0;
+    int                  i_w = 0, i_h = 0;
     std::vector<uint8_t> vec_volume;
-    int i_layer = 0;
+    int                  i_layer = 0;
 
     for (const auto& str_slice : vec_slices) {
         p_worker->Inference(str_slice);
@@ -122,21 +122,18 @@ int main(int argc, char const* argv[])
 
         int i_pixels = cv::countNonZero(c_mask);
         vec_volume.insert(vec_volume.end(), c_mask.data, c_mask.data + static_cast<size_t>(i_w) * i_h);
-        f_summary << i_layer << "\t" << i_pixels << "\t"
-                  << (100.0 * i_pixels / (i_w * i_h)) << "\n";
+        f_summary << i_layer << "\t" << i_pixels << "\t" << (100.0 * i_pixels / (i_w * i_h)) << "\n";
 
         // 3D-Process 兼容输入: 0/255 单字节切片 + meta
-        std::string str_u8 = str_p3d_in + "/slices/slice_" + std::to_string(10000 + i_layer).substr(1) + ".u8";
+        std::string   str_u8 = str_p3d_in + "/slices/slice_" + std::to_string(10000 + i_layer).substr(1) + ".u8";
         std::ofstream f_slice(str_u8, std::ios::binary);
-        f_slice.write(reinterpret_cast<const char*>(c_mask.data),
-                      static_cast<std::streamsize>(i_w) * i_h);
+        f_slice.write(reinterpret_cast<const char*>(c_mask.data), static_cast<std::streamsize>(i_w) * i_h);
         f_slice.close();
         i_layer++;
     }
 
     std::ofstream f_raw(str_out + "/mask_volume.raw", std::ios::binary);
-    f_raw.write(reinterpret_cast<const char*>(vec_volume.data()),
-                static_cast<std::streamsize>(vec_volume.size()));
+    f_raw.write(reinterpret_cast<const char*>(vec_volume.data()), static_cast<std::streamsize>(vec_volume.size()));
     f_raw.close();
 
     f_summary << "volume: " << i_w << " x " << i_h << " x " << i_layer << "\n";
@@ -144,8 +141,8 @@ int main(int argc, char const* argv[])
 
     // meta.txt: W H D dx dy dz（3D-Process 输入）
     std::ofstream f_meta(str_p3d_in + "/meta.txt");
-    f_meta << i_w << " " << i_h << " " << i_layer << " "
-           << arr_spacing[0] << " " << arr_spacing[1] << " " << arr_spacing[2] << "\n";
+    f_meta << i_w << " " << i_h << " " << i_layer << " " << arr_spacing[0] << " " << arr_spacing[1] << " "
+           << arr_spacing[2] << "\n";
     f_meta.close();
 
     printf("Done. %d slices, volume %d x %d x %d\n", i_layer, i_w, i_h, i_layer);
@@ -156,7 +153,10 @@ int main(int argc, char const* argv[])
         // 依次探测 liver3d 二进制位置（不同工作目录下）
         std::string str_liver3d;
         for (const auto& str_cand : {"./liver3d", "bin/liver3d", "../bin/liver3d", "post3d/bin/liver3d"}) {
-            if (std::filesystem::exists(str_cand)) { str_liver3d = str_cand; break; }
+            if (std::filesystem::exists(str_cand)) {
+                str_liver3d = str_cand;
+                break;
+            }
         }
         if (str_liver3d.empty()) {
             printf("liver3d not found. Build it with: make liver3d\n");
@@ -164,12 +164,8 @@ int main(int argc, char const* argv[])
         }
         // liver3d 不会自建输出目录
         std::filesystem::create_directories(str_out + "/post3d_out");
-        std::string str_cmd = str_liver3d
-            + " --slices " + str_p3d_in + "/slices"
-            + " --meta " + str_p3d_in + "/meta.txt"
-            + " --no-gt"
-            + " --out " + str_out + "/post3d_out/liver"
-            + str_post3d_extra;
+        std::string str_cmd = str_liver3d + " --slices " + str_p3d_in + "/slices" + " --meta " + str_p3d_in +
+                              "/meta.txt" + " --no-gt" + " --out " + str_out + "/post3d_out/liver" + str_post3d_extra;
         printf("Running 3D post-processing: %s\n", str_cmd.c_str());
         int ret = std::system(str_cmd.c_str());
         if (ret != 0) {
@@ -178,7 +174,7 @@ int main(int argc, char const* argv[])
         }
 
         // 后处理结果导出为 2D 切面序列（final_slice_%04d.png，0/255 mask）
-        std::string str_final = str_out + "/post3d_out/liver_final.u8";
+        std::string str_final     = str_out + "/post3d_out/liver_final.u8";
         std::string str_slice_dir = str_out + "/post3d_out/final_slices";
         std::filesystem::create_directories(str_slice_dir);
         std::ifstream f_in(str_final, std::ios::binary);
@@ -188,16 +184,15 @@ int main(int argc, char const* argv[])
         else {
             for (int z = 0; z < i_layer; z++) {
                 std::vector<uint8_t> vec_slice(static_cast<size_t>(i_w) * i_h);
-                f_in.read(reinterpret_cast<char*>(vec_slice.data()),
-                          static_cast<std::streamsize>(vec_slice.size()));
+                f_in.read(reinterpret_cast<char*>(vec_slice.data()), static_cast<std::streamsize>(vec_slice.size()));
                 cv::Mat c_slice(i_h, i_w, CV_8UC1, vec_slice.data());
                 c_slice *= 255;  // 0/1 -> 0/255
                 char ch_name[64];
                 snprintf(ch_name, sizeof(ch_name), "final_slice_%04d.png", z);
                 cv::imwrite(str_slice_dir + "/" + ch_name, c_slice);
             }
-            printf("Final mask exported as 2D slices: %s/final_slice_*.png (%d slices)\n",
-                   str_slice_dir.c_str(), i_layer);
+            printf("Final mask exported as 2D slices: %s/final_slice_*.png (%d slices)\n", str_slice_dir.c_str(),
+                   i_layer);
         }
         printf("3D post-processing output: %s/post3d_out/liver_final.u8\n", str_out.c_str());
     }

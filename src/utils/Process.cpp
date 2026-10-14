@@ -2,33 +2,29 @@
 #include "include/utils/Logger.h"
 #include "include/utils/CudaCheck.h"
 
-cv::Mat ResizeCpu(
-    cv::Mat &matSrc, 
-    const int &iTarH, const int &iTarW, 
-    float* arrMean, float* arrStd,
-    InterpolationTactics eInterpolation) 
-{
+cv::Mat ResizeCpu(cv::Mat& matSrc, const int& iTarH, const int& iTarW, float* arrMean, float* arrStd,
+                  InterpolationTactics eInterpolation) {
     cv::Mat mat_tar;
 
-    int i_height   = matSrc.rows;
-    int i_width    = matSrc.cols;
-    float f_dim    = std::max(i_height, i_width);
-    int i_resize_h = ((i_height / f_dim) * iTarH);
-    int i_resize_w = ((i_width / f_dim) * iTarW);
-    int i_x_offset = (iTarW - i_resize_w) / 2;
-    int i_y_offset = (iTarH - i_resize_h) / 2;
-    i_resize_w     = iTarW;
-    i_resize_h     = iTarH;
+    int   i_height   = matSrc.rows;
+    int   i_width    = matSrc.cols;
+    float f_dim      = std::max(i_height, i_width);
+    int   i_resize_h = ((i_height / f_dim) * iTarH);
+    int   i_resize_w = ((i_width / f_dim) * iTarW);
+    int   i_x_offset = (iTarW - i_resize_w) / 2;
+    int   i_y_offset = (iTarH - i_resize_h) / 2;
+    i_resize_w       = iTarW;
+    i_resize_h       = iTarH;
 
     // BGR2RGB
     cv::cvtColor(matSrc, matSrc, cv::COLOR_BGR2RGB);
 
     // Resize
     switch (eInterpolation) {
-        case InterpolationTactics::CPU_NEAREST: 
+        case InterpolationTactics::CPU_NEAREST:
             cv::resize(matSrc, mat_tar, cv::Size(i_resize_w, i_resize_h), 0, 0, cv::INTER_LINEAR);
             break;
-        case InterpolationTactics::CPU_BILINEAR: 
+        case InterpolationTactics::CPU_BILINEAR:
             cv::resize(matSrc, mat_tar, cv::Size(i_resize_w, i_resize_h), 0, 0, cv::INTER_NEAREST);
             break;
         default:
@@ -38,12 +34,8 @@ cv::Mat ResizeCpu(
     return mat_tar;
 }
 
-void ResizeGpu(
-    cv::Mat &matHostSrc, float* pDeviceTar, 
-    const int& iTarH, const int& iTarW, 
-    float* arrMean, float* arrStd, 
-    InterpolationTactics eInterpolation) 
-{
+void ResizeGpu(cv::Mat& matHostSrc, float* pDeviceTar, const int& iTarH, const int& iTarW, float* arrMean,
+               float* arrStd, InterpolationTactics eInterpolation) {
     float*   arr_mean = nullptr;
     float*   arr_std  = nullptr;
     uint8_t* d_src    = nullptr;
@@ -81,20 +73,16 @@ void ResizeGpu(
 }
 
 // 根据比例进行缩放 (GPU版本)
-void ResizeGpu(
-    cv::Mat &matHostSrc, float* pDeviceTar, 
-    const int& iTarH, const int& iTarW, 
-    InterpolationTactics eInterpolation) 
-{
-    uint8_t* d_src  = nullptr;
+void ResizeGpu(cv::Mat& matHostSrc, float* pDeviceTar, const int& iTarH, const int& iTarW,
+               InterpolationTactics eInterpolation) {
+    uint8_t* d_src = nullptr;
 
-    int i_height   = matHostSrc.rows;
-    int i_width    = matHostSrc.cols;
+    int i_height = matHostSrc.rows;
+    int i_width  = matHostSrc.cols;
     int chan     = 3;
 
     int src_size  = i_height * i_width * chan * sizeof(uint8_t);
     int norm_size = 3 * sizeof(float);
-
 
     // 分配device上的src的内存
     CUDA_CHECK(cudaMalloc(&d_src, src_size));
@@ -127,21 +115,21 @@ cv::Mat LetterboxCpu(const cv::Mat& matSrc, float* pDst, int iTarH, int iTarW) {
 
     // 创建目标画布并居中放置
     cv::Mat mat_tar(iTarH, iTarW, CV_8UC3, cv::Scalar(0, 0, 0));
-    int i_x = (i_new_w < iTarW) ? (iTarW - i_new_w) / 2 : 0;
-    int i_y = (i_new_h < iTarH) ? (iTarH - i_new_h) / 2 : 0;
+    int     i_x     = (i_new_w < iTarW) ? (iTarW - i_new_w) / 2 : 0;
+    int     i_y     = (i_new_h < iTarH) ? (iTarH - i_new_h) / 2 : 0;
     cv::Mat mat_roi = mat_tar(cv::Rect(i_x, i_y, i_new_w, i_new_h));
     mat_resized.copyTo(mat_roi);
 
     // NHWC → NCHW, /255 归一化
-    int i_img_area = iTarH * iTarW;
+    int i_img_area   = iTarH * iTarW;
     int i_offset_ch0 = i_img_area * 0;
     int i_offset_ch1 = i_img_area * 1;
     int i_offset_ch2 = i_img_area * 2;
-    int i_channel = 3;
+    int i_channel    = 3;
 
     for (int i = 0; i < iTarH; i++) {
         for (int j = 0; j < iTarW; j++) {
-            int i_idx = i * iTarW * i_channel + j * i_channel;
+            int i_idx            = i * iTarW * i_channel + j * i_channel;
             pDst[i_offset_ch2++] = mat_tar.data[i_idx + 0] / 255.0f;
             pDst[i_offset_ch1++] = mat_tar.data[i_idx + 1] / 255.0f;
             pDst[i_offset_ch0++] = mat_tar.data[i_idx + 2] / 255.0f;

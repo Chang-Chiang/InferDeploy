@@ -9,7 +9,7 @@ class YoloClassifier : public InferBase {
 public:
     YoloClassifier(const std::string& strOnnxPath, Level cLevel, const Params& cParams,
                    std::shared_ptr<InferBackend> pBackend)
-        : InferBase(strOnnxPath, cLevel, cParams, std::move(pBackend)) { };
+        : InferBase(strOnnxPath, cLevel, cParams, std::move(pBackend)) {};
 
 public:
     virtual void SetupIoBuffers() override;

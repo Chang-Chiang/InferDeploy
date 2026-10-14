@@ -7,7 +7,7 @@
 #include "include/tasks/UnetSegmenter.h"
 #include "include/core/TrtBackend.h"
 #ifdef ENABLE_OPENVINO
-#include "include/core/OvBackend.h"
+    #include "include/core/OvBackend.h"
 #endif
 
 class Worker {
@@ -24,13 +24,13 @@ public:
     void Inference(const std::string& strImagePath);
 
 public:
-    Params                           m_cParams;
-    std::unique_ptr<YoloClassifier>  m_pYoloClassifier;
-    std::unique_ptr<YoloDetector>    m_pYoloDetector;
-    std::unique_ptr<YoloMultitask>   m_pYoloMultitask;
-    std::unique_ptr<UnetSegmenter>   m_pUnetSegmenter;
-    std::vector<float>               m_vecScore;
-    std::vector<Bbox>                m_vecBbox;
+    Params                          m_cParams;
+    std::unique_ptr<YoloClassifier> m_pYoloClassifier;
+    std::unique_ptr<YoloDetector>   m_pYoloDetector;
+    std::unique_ptr<YoloMultitask>  m_pYoloMultitask;
+    std::unique_ptr<UnetSegmenter>  m_pUnetSegmenter;
+    std::vector<float>              m_vecScore;
+    std::vector<Bbox>               m_vecBbox;
 };
 
 std::shared_ptr<Worker> CreateWorker(const std::string& strOnnxPath, Level cLevel, const Params& cParams);

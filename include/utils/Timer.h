@@ -48,13 +48,21 @@ template <typename span>
 void Timer::StopCpu(std::string strMsg) {
     m_pointCpuStop = std::chrono::high_resolution_clock::now();
 
-    char c_buff[100];
+    char        c_buff[100];
     std::string str_time_unit;
 
-    if(std::is_same<span, s>::value) { str_time_unit = "s"; }
-    else if(std::is_same<span, ms>::value) { str_time_unit = "ms"; }
-    else if(std::is_same<span, us>::value) { str_time_unit = "us"; }
-    else if(std::is_same<span, ns>::value) { str_time_unit = "ns"; }
+    if (std::is_same<span, s>::value) {
+        str_time_unit = "s";
+    }
+    else if (std::is_same<span, ms>::value) {
+        str_time_unit = "ms";
+    }
+    else if (std::is_same<span, us>::value) {
+        str_time_unit = "us";
+    }
+    else if (std::is_same<span, ns>::value) {
+        str_time_unit = "ns";
+    }
 
     std::chrono::duration<double, span> d_time = m_pointCpuStop - m_pointCpuStart;
     std::sprintf(c_buff, "\t%-60s uses %.6lf %s", strMsg.c_str(), d_time.count(), str_time_unit.c_str());

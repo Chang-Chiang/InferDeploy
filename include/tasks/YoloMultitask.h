@@ -10,8 +10,8 @@ public:
     YoloMultitask(const std::string& strOnnxPath, Level cLevel, const Params& cParams,
                   std::shared_ptr<InferBackend> pBackend)
         : InferBase(strOnnxPath, cLevel, cParams, std::move(pBackend)) {
-        m_pDetectMemory[0] = nullptr;
-        m_pDetectMemory[1] = nullptr;
+        m_pDetectMemory[0]  = nullptr;
+        m_pDetectMemory[1]  = nullptr;
         m_pSegmentMemory[0] = nullptr;
         m_pSegmentMemory[1] = nullptr;
     };
@@ -59,6 +59,5 @@ protected:
     void ReleaseExtraBuffers() override;
 };
 
-std::unique_ptr<YoloMultitask> MakeMultitask(
-    const std::string& strOnnxPath, Level cLevel, const Params& cParams,
-    std::shared_ptr<InferBackend> pBackend);
+std::unique_ptr<YoloMultitask> MakeMultitask(const std::string& strOnnxPath, Level cLevel, const Params& cParams,
+                                             std::shared_ptr<InferBackend> pBackend);
